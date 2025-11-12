@@ -1,0 +1,77 @@
+---
+title: "Práctica 3. Introducción al Polimorfismo"
+author: "José Fernández Quintana"
+format: pdf
+---
+
+## Código en Python
+
+```{python}
+# Práctica 3. Introducción al Polimorfismo
+# Simular un sistema de cobro con múltiples opciones de pago.
+
+class PagoTarjeta:
+    def procesar_pago(self, cantidad):
+        return f"Procesando pago de ${cantidad} con tarjeta bancaria."
+
+class Transferencia:
+    def procesar_pago(self, cantidad):
+        return f"Procesando pago con transferencia por la cantidad de ${cantidad}."
+
+class Deposito:
+    def procesar_pago(self, cantidad):
+        return f"Procesando pago mediante depósito en ventanilla por la cantidad de ${cantidad}."
+
+class Paypal:
+    def procesar_pago(self, cantidad):
+        return f"Procesando pago de ${cantidad} por medio de PayPal."
+```
+
+# Ejemplo: recorrer distintas formas de pago
+```{python}
+metodos_pago = [PagoTarjeta(), Transferencia(), Deposito(), Paypal()]
+
+for m in metodos_pago:
+    print(m.procesar_pago(500))
+```
+
+# Actividad: Procesar diferentes cantidades en cada forma de pago
+```{python}
+pago1 = PagoTarjeta()
+pago2 = Transferencia()
+pago3 = Deposito()
+pago4 = Paypal()
+
+print(pago1.procesar_pago(100)) 
+print(pago2.procesar_pago(500))
+print(pago3.procesar_pago(400))
+print(pago4.procesar_pago(2000))
+```
+
+
+# Ejemplo 2: Polimorfismo aplicado a comunicación de calificaciones
+```{python}
+class WhatsApp:
+    def proceso(self, calf):
+        return f"Este mensaje es enviado para entregar la calificación del alumno: {calf}. Por medio de WhatsApp."
+
+class PagWeb:
+    def proceso(self, calf):
+        return f"El alumno tiene la calificación de {calf}, publicada en la página web."
+
+class Correo:
+    def proceso(self, calf):
+        return f"Este correo es enviado para entregar la calificación del alumno: {calf}."
+
+class Mensajes:
+    def proceso(self, calf):
+        return f"Este mensaje es enviado para entregar la calificación del alumno: {calf}. Por medio de SMS."
+```
+
+# Recorrer distintos medios de comunicación
+```{python}
+mostrar_calf = [WhatsApp(), PagWeb(), Correo(), Mensajes()]
+
+for m in mostrar_calf:
+    print(m.proceso(9.7))
+```
