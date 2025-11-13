@@ -42,8 +42,11 @@ class AgendarCitaFrame(ctk.CTkFrame):
 
         self.content_frame = ctk.CTkFrame(self, fg_color=BG_COLOR)
         self.content_frame.pack(fill="both", expand=True)
-        self.content_frame.grid_columnconfigure(0, weight=2) 
-        self.content_frame.grid_columnconfigure(1, weight=1) 
+        # --- CAMBIO 1: Configuración de peso para paneles ---
+        # Panel Izquierdo (columna 0) toma todo el espacio sobrante
+        self.content_frame.grid_columnconfigure(0, weight=1) 
+        # Panel Derecho (columna 1) solo toma el espacio que necesiten sus widgets (se 'pega' a la derecha)
+        self.content_frame.grid_columnconfigure(1, weight=0) 
         self.content_frame.grid_rowconfigure(0, weight=1)
 
         self.create_form_panel()
@@ -51,8 +54,10 @@ class AgendarCitaFrame(ctk.CTkFrame):
 
     def create_form_panel(self):
         # Panel Izquierdo (Formulario)
+        # Ajustamos padx para que el panel izquierdo no se pegue al borde izquierdo del content_frame
         self.form_panel = ctk.CTkFrame(self.content_frame, fg_color=WHITE_FRAME, corner_radius=15, border_color=SOFT_BLUE_FRAME, border_width=1)
-        self.form_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 20), pady=10)
+        # Ajustamos el padx del panel izquierdo para dejar un margen a la izquierda y un espacio entre paneles.
+        self.form_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 20), pady=10) 
         
         # Header del formulario
         header_form = ctk.CTkFrame(self.form_panel, fg_color="transparent")
@@ -102,11 +107,14 @@ class AgendarCitaFrame(ctk.CTkFrame):
     def create_card_panel(self):
         # Panel Derecho (Tarjetas)
         self.card_panel = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        self.card_panel.grid(row=0, column=1, sticky="nsew", padx=0, pady=10)
+        # El sticky="nsew" y el peso=0 en la columna 1 aseguran que se pegue a la derecha.
+        # Ajustamos el padx para dejar un margen a la derecha y entre paneles.
+        self.card_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=10) 
         
-        self._add_estimated_time_card(self.card_panel, 0)
-        self._add_medical_team_card(self.card_panel, 1)
-        self._add_my_appointments_card(self.card_panel, 2)
+        # --- CAMBIO 2: Eliminación de la tarjeta de tiempo estimado ---
+        # self._add_estimated_time_card(self.card_panel, 0) # ¡Eliminada!
+        self._add_medical_team_card(self.card_panel, 0) # El equipo médico pasa a la fila 0
+        self._add_my_appointments_card(self.card_panel, 1) # Mis citas pasa a la fila 1
         
     # --- Métodos de Contrucción de UI y Lógica ---
 
@@ -292,6 +300,7 @@ class AgendarCitaFrame(ctk.CTkFrame):
 
 
     def _add_estimated_time_card(self, parent, row):
+        # ESTE MÉTODO HA SIDO ELIMINADO DE create_card_panel
         # Simulación del gradiente azul intenso
         card = ctk.CTkFrame(parent, corner_radius=15, fg_color=BLUE_GRADIENT_START) 
         card.grid(row=row, column=0, sticky="ew", pady=(10, 20))
@@ -307,7 +316,7 @@ class AgendarCitaFrame(ctk.CTkFrame):
 
     def _add_medical_team_card(self, parent, row):
         card = ctk.CTkFrame(parent, fg_color=WHITE_FRAME, corner_radius=15, border_color="#DDDDDD", border_width=1)
-        card.grid(row=row, column=0, sticky="ew", pady=(0, 20))
+        card.grid(row=row, column=0, sticky="ew", pady=(10, 20)) # Ajustamos pady para la primera tarjeta
         ctk.CTkLabel(card, text=" ⚕️ Nuestro Equipo Médico", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT_BLUE, anchor="w").pack(fill="x", padx=15, pady=(15, 10))
         
         # Obtener la lista de doctoras completa (nombre y especialidad)
@@ -346,4 +355,5 @@ class AgendarCitaFrame(ctk.CTkFrame):
         ctk.CTkLabel(no_citas_frame, text="🗓️", font=ctk.CTkFont(size=50), text_color=ACCENT_BLUE).pack(pady=(20, 5))
         ctk.CTkLabel(no_citas_frame, text="No hay citas programadas", font=ctk.CTkFont(size=14, weight="bold"), text_color="#333333").pack()
         ctk.CTkLabel(no_citas_frame, text="¡Agenda tu primera cita!", font=ctk.CTkFont(size=12, slant="italic"), text_color="#6B6B6B").pack(pady=(0, 20))
+
         

@@ -214,9 +214,21 @@ class LoginApp:
 
         if validar_credenciales(usuario, password):
             messagebox.showinfo("Acceso permitido", f"Bienvenido {usuario}")
-            self.root.destroy()
-            root_dashboard = ctk.CTk()
-            DashboardApp(usuario, root_dashboard) 
-            root_dashboard.mainloop()
+
+            # Llamar al método definido en main.py para cerrar el login
+            # y abrir el dashboard sin errores Tcl
+            if hasattr(self, "cerrar_y_abrir_dashboard"):
+                self.cerrar_y_abrir_dashboard(usuario)
+            else:
+                # Método de respaldo (por si se ejecuta de forma aislada)
+                for after_id in self.root.tk.call('after', 'info').split():
+                    try:
+                        self.root.after_cancel(after_id)
+                    except Exception:
+                        pass
+                self.root.destroy()
+                root_dashboard = ctk.CTk()
+                DashboardApp(usuario, root_dashboard)
+                root_dashboard.mainloop()
         else:
             messagebox.showerror("Acceso denegado", "Tus datos no son correctos")
