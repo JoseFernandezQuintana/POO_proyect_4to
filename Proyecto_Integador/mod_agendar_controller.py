@@ -1,92 +1,107 @@
-import re
-from typing import List, Dict, Any
-from difflib import SequenceMatcher
-from typing import List, Dict, Any, Union
+import database
+from datetime import datetime, timedelta
 
-# --- Base de datos de ejemplo (Simulación) ---
-# Usualmente esto interactuaría con una base de datos real (SQL, MongoDB, etc.)
-DB_CITAS = [
-    {
-        'id': 101, 'nombre_completo': 'Juan Pérez López', 'telefono': '8715551234', 
-        'doctora': 'Dra. Raquel Guzmán Reyes (Ortodoncia)', 'tratamiento': 'Ajuste de Brackets',
-        'fecha_cita': '2025-12-01', 'hora_cita': '10:00', 'costo_sesion': '800.00', 'nota': 'Ligas azules.'
-    },
-    {
-        'id': 102, 'nombre_completo': 'María Fernanda Gónzalez', 'telefono': '3331234567', 
-        'doctora': 'Dra. Paola Jazmin Vera Guzmán (Endodoncia)', 'tratamiento': 'Endodoncia de molar',
-        'fecha_cita': '2025-12-02', 'hora_cita': '14:30', 'costo_sesion': '2500.00', 'nota': 'Primera fase.'
-    },
-    {
-        'id': 103, 'nombre_completo': 'Luis Alberto Sánchez', 'telefono': '5559876543', 
-        'doctora': 'Dra. Raquel Guzmán Reyes (Ortodoncia)', 'tratamiento': 'Presupuesto Inicial',
-        'fecha_cita': '2025-12-03', 'hora_cita': '09:00', 'costo_sesion': '0.00', 'nota': ''
-    },
-]
+# Mapeo Inverso (Nombre -> ID) para guardar
+MAPA_DOCTORAS_ID = {
+    "Dra. Raquel Guzmán Reyes (Ortodoncia)": 1,
+    "Dra. Paola Jazmin Vera Guzmán (Endodoncia)": 2,
+    "Dra. María Fernanda Cabrera (Cirugía General)": 3
+}
+
+# Mapeo Directo (ID -> Nombre) para cargar datos
+MAPA_ID_DOCTORAS = {v: k for k, v in MAPA_DOCTORAS_ID.items()}
 
 class ModificarCitaController:
-    def __init__(self):
-        self.citas_data = DB_CITAS
-
-    def _match_score(self, a: str, b: str) -> float:
-        """Calcula una puntuación de similitud entre dos cadenas (0.0 a 1.0)."""
-        # Se convierte a minúsculas y se eliminan espacios para la comparación flexible
-        a = a.lower().replace(' ', '')
-        b = b.lower().replace(' ', '')
-        return SequenceMatcher(None, a, b).ratio()
-
-    def buscar_citas_flexibles(self, query: str) -> List[Dict[str, Any]]:
-        """
-        Busca citas basándose en una consulta, permitiendo errores de tipografía
-        y nombres/teléfonos parciales, con una lógica de 'coincidencia flexible'.
-        """
-        if len(query) < 3:
+    
+    def buscar_citas_flexibles(self, query):
+        """Busca en la BD usando SQL LIKE."""
+        if not query or len(query) < 2:
             return []
         
-        query = query.strip().lower()
-        resultados_filtrados = []
+        raw_results = database.buscar_citas_bd(query)
+        processed = []
         
-        for cita in self.citas_data:
-            nombre = cita['nombre_completo'].lower()
-            telefono = cita['telefono'].lower()
+        for r in raw_results:
+            # Formatear para el dropdown
+            fecha = r['fecha_cita'] # Puede ser objeto date o string
+            hora = str(r['hora_inicio'])
+            display_text = f"ID {r['cita_id']} | {r['paciente']} | {fecha} {hora}"
             
-            score_nombre = 0.0
-            score_telefono = 0.0
+            processed.append({
+                'display': display_text,
+                'id': r['cita_id']
+            })
+        return processed
 
-            # 1. Búsqueda por Subcadena (para nombres/teléfonos parciales)
-            if query in nombre:
-                score_nombre = 1.0 # Coincidencia exacta de subcadena
+    def obtener_datos_cita(self, cita_id):
+        """Obtiene detalle y formatea para la vista."""
+        raw = database.obtener_cita_por_id(cita_id)
+        if not raw:
+            return None
             
-            # Buscamos el query sin formato en el teléfono
-            if re.sub(r'[^0-9]', '', query) in re.sub(r'[^0-9]', '', telefono):
-                score_telefono = 1.0 # Coincidencia exacta de subcadena en número
-
-            # 2. Búsqueda por Similitud (para errores tipográficos o falta de nombre completo)
-            if score_nombre < 1.0: # Solo si no hubo una coincidencia de subcadena perfecta
-                 # Comparamos la cadena de consulta con el nombre completo y cada palabra del nombre
-                 score_nombre = max([self._match_score(query, nombre), 
-                                     *[self._match_score(query, part) for part in nombre.split()]])
-
-            # Tomamos la mejor puntuación entre nombre y teléfono
-            final_score = max(score_nombre, score_telefono)
-            
-            # Umbral de Coincidencia: Solo incluimos resultados con un score alto
-            if final_score >= 0.7: # Umbral de 70% de similitud o subcadena
-                cita_info = {
-                    'display': f"ID {cita['id']} | {cita['nombre_completo']} | {cita['fecha_cita']} {cita['hora_cita']}",
-                    'id': cita['id'],
-                    'score': final_score # Para ordenar los resultados
-                }
-                resultados_filtrados.append(cita_info)
-
-        # Ordenar por el score más alto (mejor coincidencia)
-        resultados_filtrados.sort(key=lambda x: x['score'], reverse=True)
+        # Recuperar nombre completo de doctora basado en ID
+        nombre_doc = MAPA_ID_DOCTORAS.get(raw['doctora_id'], "Desconocido")
         
-        return resultados_filtrados
+        # Formatear hora (quitar segundos)
+        hora_str = str(raw['hora_inicio'])
+        if len(hora_str) > 5: hora_str = hora_str[:5]
 
-    def obtener_datos_cita(self, cita_id: int) -> Union[Dict[str, Any], None]:
-        """Obtiene todos los datos de una cita específica por su ID."""
-        return next((cita for cita in self.citas_data if cita['id'] == cita_id), None)
-        
+        return {
+            'id': raw['id'],
+            'nombre_completo': f"{raw['nombre']} {raw['apellido']}",
+            'doctora': nombre_doc,
+            'fecha_obj': raw['fecha_cita'], # Objeto date
+            'fecha_str': raw['fecha_cita'].strftime('%d/%m/%Y'),
+            'hora': hora_str,
+            'motivo': raw['motivo_cita'],
+            'notas': raw['notas']
+        }
+
     def obtener_doctoras(self):
-        """Método para obtener la lista de doctoras (reutilizado de agendar_view)"""
-        return sorted(list(set([d['doctora'] for d in self.citas_data])))
+        return list(MAPA_DOCTORAS_ID.keys())
+
+    def generar_horarios_disponibles(self, fecha_datetime):
+        """Misma lógica que en Agendar."""
+        dia_semana = fecha_datetime.weekday() 
+        if dia_semana == 6: return [] # Domingo cerrado
+
+        hora_inicio = 11
+        hora_fin = 16 if dia_semana == 5 else 20 
+
+        horarios = []
+        current = datetime(fecha_datetime.year, fecha_datetime.month, fecha_datetime.day, hora_inicio, 0)
+        end = datetime(fecha_datetime.year, fecha_datetime.month, fecha_datetime.day, hora_fin, 0)
+
+        while current < end:
+            horarios.append(current.strftime("%H:%M"))
+            current += timedelta(minutes=15)
+        return horarios
+
+    def guardar_modificacion(self, cita_id, datos_form):
+        # 1. Validar
+        doc_id = MAPA_DOCTORAS_ID.get(datos_form['doctora'])
+        if not doc_id: return False, "Doctora no válida."
+        
+        if datos_form['hora'] == "--:--": return False, "Hora no válida."
+
+        # 2. Verificar disponibilidad (Opcional: permitir misma hora si es la misma cita)
+        # Por simplicidad, asumimos que el recepcionista sabe lo que hace al modificar,
+        # o podrías reutilizar database.verificar_disponibilidad excluyendo el ID actual.
+
+        datos_bd = {
+            'doctora_id': doc_id,
+            'fecha': datos_form['fecha_obj'].strftime('%Y-%m-%d'),
+            'hora': datos_form['hora'],
+            'motivo': datos_form['motivo'],
+            'notas': datos_form['notas']
+        }
+        
+        if database.actualizar_cita_bd(cita_id, datos_bd):
+            return True, "Cita modificada correctamente."
+        return False, "Error al actualizar en BD."
+
+    def cancelar_cita(self, cita_id):
+        if database.cancelar_cita_bd(cita_id):
+            return True, "Cita cancelada correctamente."
+        return False, "Error al cancelar."
+    

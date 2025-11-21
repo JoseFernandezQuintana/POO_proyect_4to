@@ -9,6 +9,8 @@ from typing import Dict, Any, Union
 from agendar_view import AgendarCitaFrame
 from mod_agendar_view import ModificarCitaFrame 
 from calendario_view import CalendarFrame
+# Importar la nueva vista de configuración
+from conf_view import ConfFrame 
 
 # Intentar importar el controlador de autenticación
 try:
@@ -26,6 +28,9 @@ ACCENT_BLUE = "#007BFF"
 # Rutas de imágenes
 LOGO_DASHBOARD_PATH = os.path.join(current_dir, "logo.jpg") 
 
+# --- PLACEHOLDER DE ConfFrame ELIMINADO ---
+# Se elimina la clase ConfFrame de placeholder.
+
 
 class DashboardApp:
     def __init__(self, username, root):
@@ -36,7 +41,10 @@ class DashboardApp:
         self.root.configure(fg_color=BG_COLOR)
 
         self.root.grid_rowconfigure(2, weight=1) 
-        self.root.grid_columnconfigure(0, weight=1)
+        
+        # Configurar las dos columnas para la fila 2 (Contenido Principal y Sidebar de Configuración)
+        self.root.grid_columnconfigure(0, weight=1) # Columna 0: Contenido principal, expande
+        self.root.grid_columnconfigure(1, weight=0) # Columna 1: Configuración, no expande
         
         # Bandera que debe ser verificada por main.py 
         self.app_closed_completely = False 
@@ -46,6 +54,8 @@ class DashboardApp:
             "modificar": ModificarCitaFrame,
             "calendario": CalendarFrame
         }
+        
+        self.config_sidebar_visible = False
 
         # 1. HEADER / BARRA SUPERIOR
         self.create_header()
@@ -53,10 +63,10 @@ class DashboardApp:
         # 2. BARRA DE NAVEGACIÓN
         self.create_navigation_bar()
 
-        # 3. Panel Desplegable de Configuración (Inicialización Oculta)
-        self.create_settings_panel() # Se crea antes del contenido para que esté en un nivel superior (z-order)
+        # 3. Panel Lateral de Configuración (Creación inicial)
+        self.create_config_sidebar() 
 
-        # 4. CONTENIDO PRINCIPAL 
+        # 4. CONTENIDO PRINCIPAL (Se ubica en la columna 0, fila 2)
         self.content_container = ctk.CTkFrame(self.root, fg_color=BG_COLOR)
         self.content_container.grid(row=2, column=0, sticky="nsew", padx=20, pady=0)
         self.content_container.grid_columnconfigure(0, weight=1)
@@ -68,7 +78,7 @@ class DashboardApp:
     
     def create_header(self):
         self.header_frame = ctk.CTkFrame(self.root, height=60, fg_color=BLUE_HEADER, corner_radius=0)
-        self.header_frame.grid(row=0, column=0, sticky="ew")
+        self.header_frame.grid(row=0, column=0, columnspan=2, sticky="ew") # Ocupa ambas columnas
         self.header_frame.grid_columnconfigure(0, weight=1) 
         self.header_frame.grid_columnconfigure(1, weight=0)
 
@@ -96,117 +106,60 @@ class DashboardApp:
             text_color="white"
         ).pack(side="left", padx=20)
         
-        # --- BOTÓN DE CONFIGURACIÓN (Reemplazo del OptionMenu) ---
+        # --- BOTÓN DE CONFIGURACIÓN (Activa el sidebar) ---
         self.config_button = ctk.CTkButton(
             right_header_frame,
             text="⚙️ Configuración",
-            width=180, # Aumento el ancho para que coincida con el panel
+            width=180, 
             height=35,
             corner_radius=10,
             fg_color="#FFFFFF",
             text_color=BLUE_HEADER,
             hover_color="#D9EFFF",
             font=ctk.CTkFont(size=14, weight="bold"),
-            command=self.toggle_settings_panel
+            command=self.toggle_config_sidebar # Llama al nuevo método
         )
         self.config_button.pack(side="left", padx=10)
         
-    def create_settings_panel(self):
-        """Crea el panel desplegable de configuración que se muestra/oculta."""
-        
-        # Panel desplegable de configuración (oculto al inicio)
-        self.settings_panel = ctk.CTkFrame(
+    def create_config_sidebar(self):
+        """Crea el frame del panel lateral de configuración."""
+        # Se inicializa, pero no se coloca en la cuadrícula hasta que se togglee.
+        # Usa la clase importada ConfFrame
+        self.config_frame = ConfFrame(
             self.root, 
-            fg_color="white", 
-            corner_radius=10,
-            # Agregamos un borde sutil para destacarlo
-            border_color="#DDDDDD",
-            border_width=1
+            handle_action_callback=self.handle_config_action, 
+            width=250 # Ancho fijo para el sidebar
         )
-        self.settings_panel_visible = False
         
-        # Botones dentro del panel
-        
-        # Administración de Cuentas
-        ctk.CTkButton(
-            self.settings_panel,
-            text="Administración de Cuentas",
-            command=lambda: self.handle_config_action("Administración de Cuentas"),
-            fg_color="#F2F2F2",
-            hover_color="#E0E0E0",
-            text_color="#333333",
-            corner_radius=8
-        ).pack(fill="x", padx=10, pady=(10, 5))
+    def toggle_config_sidebar(self):
+        """Muestra u oculta el panel lateral de configuración, ajustando la cuadrícula."""
+        if self.config_sidebar_visible:
+            # OCULTAR: Eliminar el sidebar de la cuadrícula y permitir que el contenido principal expanda.
+            self.config_frame.grid_forget()
+            self.config_sidebar_visible = False
+            
+            # Restaurar el grid: Columna 0 (contenido) ocupa todo el ancho.
+            self.root.grid_columnconfigure(0, weight=1)
+            self.root.grid_columnconfigure(1, weight=0) # Asegura que la columna 1 no exista
 
-        # Cotización de Servicios
-        ctk.CTkButton(
-            self.settings_panel,
-            text="Cotización de Servicios",
-            command=lambda: self.handle_config_action("Cotización de Servicios"),
-            fg_color="#F2F2F2",
-            hover_color="#E0E0E0",
-            text_color="#333333",
-            corner_radius=8
-        ).pack(fill="x", padx=10, pady=5)
-        
-        # Separador visual
-        ctk.CTkFrame(self.settings_panel, height=1, fg_color="#E0E0E0").pack(fill="x", padx=10, pady=5)
-
-        # Cerrar Sesión
-        ctk.CTkButton(
-            self.settings_panel,
-            text="🚪 Cerrar Sesión",
-            command=lambda: self.handle_config_action("🚪 Cerrar Sesión"),
-            fg_color="#FFF5F5", # Color suave de alerta
-            hover_color="#FFD5D5",
-            text_color="#C0392B", # Rojo oscuro para contraste
-            corner_radius=8
-        ).pack(fill="x", padx=10, pady=5)
-
-        # Cerrar App
-        ctk.CTkButton(
-            self.settings_panel,
-            text="🛑 Cerrar App",
-            command=lambda: self.handle_config_action("🛑 Cerrar App"),
-            fg_color="#FFCCCC", # Rojo más intenso
-            hover_color="#FFBBBB",
-            text_color="#880000",
-            corner_radius=8
-        ).pack(fill="x", padx=10, pady=(5, 10))
-
-
-    def toggle_settings_panel(self):
-        """Muestra u oculta el panel de configuración personalizado."""
-        if self.settings_panel_visible:
-            # Ocultar
-            self.settings_panel.place_forget()
-            self.settings_panel_visible = False
         else:
-            # Mostrar: Ubicar debajo y alineado a la derecha del botón
+            # MOSTRAR: Colocar el sidebar en la columna 1.
+            self.config_frame.grid(row=2, column=1, sticky="nsew", padx=(0, 20), pady=0)
+            self.config_sidebar_visible = True
             
-            # 1. Obtener coordenadas absolutas del botón
-            btn_x_root = self.config_button.winfo_rootx()
-            btn_y_root = self.config_button.winfo_rooty()
-            btn_width = self.config_button.winfo_width()
-            
-            # 2. Obtener coordenadas absolutas de la ventana principal
-            root_x = self.root.winfo_rootx()
-            root_y = self.root.winfo_rooty()
-            
-            # 3. Calcular la posición relativa (x, y) para 'place'
-            # x: Alineado a la derecha del botón
-            panel_width = 180 # Coincidir con el ancho del botón
-            x_pos = (btn_x_root - root_x) + btn_width - panel_width
-            
-            # y: Debajo del botón (+ 40 es la altura aproximada de la barra)
-            y_pos = (btn_y_root - root_y) + self.config_button.winfo_height() + 5
-            
-            self.settings_panel.place(x=x_pos, y=y_pos, width=panel_width)
-            self.settings_panel_visible = True
+            # Ajustar el grid: Columna 0 (contenido) sigue expandiendo, Columna 1 es fija.
+            # El padding del content_container (padx=20) se ajusta automáticamente.
+            self.root.grid_columnconfigure(1, weight=0) # Columna de la configuración no expande.
+
+        # Asegura que el content_container ocupe la columna 0.
+        # Esto es importante para el caso de ocultar (donde debe rellenar el espacio).
+        self.content_container.grid(row=2, column=0, sticky="nsew", padx=20, pady=0)
+
 
     def create_navigation_bar(self):
         self.nav_frame = ctk.CTkFrame(self.root, fg_color=BG_COLOR)
-        self.nav_frame.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 5))
+        # La barra de navegación debe ocupar ambas columnas si la configuración está visible
+        self.nav_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(10, 5)) 
         
         self.nav_buttons_frame = ctk.CTkFrame(self.nav_frame, fg_color=WHITE_FRAME, corner_radius=18, height=40, border_color="#DDDDDD", border_width=1)
         self.nav_buttons_frame.pack(padx=20, pady=10, anchor="n")
@@ -238,6 +191,10 @@ class DashboardApp:
 
 
     def show_view(self, view_name):
+        # Oculta el sidebar de configuración si estaba visible al cambiar de vista principal
+        if self.config_sidebar_visible:
+            self.toggle_config_sidebar() 
+            
         if self.current_view:
             self.current_view.destroy()
             
@@ -258,22 +215,23 @@ class DashboardApp:
             
         ViewClass = self.views_map.get(view_name)
         if ViewClass:
+            # Asegura que la vista se muestre dentro del content_container
             self.current_view = ViewClass(self.content_container)
             self.current_view.pack(fill="both", expand=True)
             
-    # Función de acción principal (con modificación para ocultar el panel)
+    # Función de acción principal (ahora llamada desde ConfFrame)
     def handle_config_action(self, choice):
-        """Maneja la acción seleccionada en el menú de Configuración y oculta el panel."""
+        """Maneja la acción seleccionada en el menú de Configuración y oculta el panel (si procede)."""
         
-        # Ocultar el panel después de la selección
-        if self.settings_panel_visible:
-            self.settings_panel.place_forget()
-            self.settings_panel_visible = False
+        # Ocultar el panel después de la selección, a menos que la acción sea cerrar la app/sesión
+        if self.config_sidebar_visible and choice not in ["🚪 Cerrar Sesión", "🛑 Cerrar App"]:
+            self.toggle_config_sidebar() 
             
         should_close = False
         
         if choice == "Administración de Cuentas":
-            messagebox.showinfo("Configuración", "Abriendo panel de Administración de Cuentas...")
+            from conf_user_view import UserAdminWindow
+            UserAdminWindow(self.root)
         elif choice == "Cotización de Servicios":
             messagebox.showinfo("Configuración", "Abriendo herramienta de Cotización de Servicios...")
         elif choice == "🚪 Cerrar Sesión":
@@ -282,15 +240,11 @@ class DashboardApp:
         elif choice == "🛑 Cerrar App":
             self.close_app()
             should_close = True 
-        
-        # Nota: La línea 'if not should_close: self.config_menu.set("⚙️ Configuración")'
-        # ya no es necesaria porque el botón ahora es un CTkButton simple y su texto no cambia.
 
     def logout(self):
         """Cierra la ventana del Dashboard para regresar a la vista de Login (manejado en main.py)."""
         confirm = messagebox.askyesno("Cerrar Sesión", "¿Estás seguro de que quieres cerrar la sesión y regresar a la pantalla de inicio de sesión?")
         if confirm:
-            # Solo destruimos la ventana. El flujo en main.py detectará esto y relanzará el Login.
             self.root.destroy() 
             
     def close_app(self):
@@ -299,5 +253,5 @@ class DashboardApp:
         if confirm:
             self.app_closed_completely = True # Bandera para que main.py sepa que debe terminar.
             self.root.destroy()
-            sys.exit() # Forzamos la salida para no necesitar doble clic
-            
+            sys.exit()
+
