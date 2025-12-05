@@ -1,4 +1,5 @@
 customtkinter
 Pillow
+matplotlib
+json
 mysql-connector-python
-bcrypt

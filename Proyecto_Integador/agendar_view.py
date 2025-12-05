@@ -1,422 +1,646 @@
-# agendar_view.py
 import customtkinter as ctk
 from PIL import Image
 import os 
-import calendar
 from datetime import datetime, timedelta
 from tkinter import messagebox
+import calendar
 from agendar_controller import AgendarCitaController
 
-# --- CONFIGURACIÓN DE COLORES Y RUTAS ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-BG_COLOR = "#F0F8FF"
-WHITE_FRAME = "white"
+# Configuración Estética
+BG_MAIN = "#F4F6F9"
+WHITE_CARD = "#FFFFFF"
+TEXT_DARK = "#333333"
 ACCENT_BLUE = "#007BFF"
-SOFT_BLUE_FRAME = "#D9EFFF"
-BLUE_GRADIENT_START = "#00C6FF"
+SOFT_BLUE_BTN = "#89CFF0" 
+BORDER_COLOR = "#E0E0E0"
+HEADER_CALENDAR = "#E8F0FE"
+SUCCESS_COLOR = "#28A745"
+WARNING_COLOR = "#FFC107"
+DANGER_COLOR = "#DC3545"
+INFO_COLOR = "#17A2B8"
 
-# Colores de Estado (Para el Resumen)
-SUCCESS_COLOR = "#28A745" # Completadas
-WARNING_COLOR = "#FFC107" # Pendientes
-DANGER_COLOR = "#DC3545"  # Canceladas
-INFO_COLOR = "#17A2B8"    # En curso
-
-# Bordes discretos
-VISIBLE_BORDER = "#C8CDD6"
-DEFAULT_BORDER_WIDTH = 1
-
-ICON_CALENDAR_PATH = os.path.join(current_dir, "icon_calendar.jpg") 
-
-# Rutas de doctoras
-DR_IMAGES = {
-    "Dra. Raquel Guzmán Reyes (Ortodoncia)": os.path.join(current_dir, "doctora_1.jpg"),
-    "Dra. Paola Jazmin Vera Guzmán (Endodoncia)": os.path.join(current_dir, "doctora_2.jpg"),
-    "Dra. María Fernanda Cabrera (Cirugía General)": os.path.join(current_dir, "doctora_3.jpg"),
-}
-
-def load_doctor_image(name):
-    path = DR_IMAGES.get(name)
-    if path and os.path.exists(path):
-        try:
-            return ctk.CTkImage(Image.open(path).convert("RGB").resize((40, 40)), size=(40, 40))
-        except Exception:
-            pass
-    return ctk.CTkImage(Image.new("RGB", (40, 40), "#AAAAAA"), size=(40, 40))
-
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 class AgendarCitaFrame(ctk.CTkFrame):
+    
     def __init__(self, master):
-        super().__init__(master, fg_color="transparent")
-        self.master = master
-        self.controller = AgendarCitaController() 
+        super().__init__(master, fg_color=BG_MAIN)
+        self.controller = AgendarCitaController()
         
-        # Variables de estado para el calendario
-        self.selected_date = None
-        self.current_cal_date = datetime.now()
-
-        # Layout Principal
-        self.content_frame = ctk.CTkFrame(self, fg_color=BG_COLOR)
-        self.content_frame.pack(fill="both", expand=True)
+        self.servicios_agregados = []
+        self.selected_date = None           
+        self.display_date = datetime.now()  
+        self.cliente_existente_id = None 
+        self.mapa_pacientes_temp = {}
         
-        self.content_frame.grid_columnconfigure(0, weight=1) # Izquierda (Form) expande
-        self.content_frame.grid_columnconfigure(1, weight=0) # Derecha (Cards) fijo
-        self.content_frame.grid_rowconfigure(0, weight=1)
+        # Mapa para guardar los horarios divididos (Hora -> Lista Minutos)
+        self.mapa_horarios = {}
 
-        self.create_form_panel()
-        self.create_card_panel()
+        self.grid_columnconfigure(0, weight=6) 
+        self.grid_columnconfigure(1, weight=1) 
+        self.grid_rowconfigure(0, weight=1)
 
-    def _obtener_rangos_edad(self):
-        return ["Selecciona un rango", "0 - 3 años", "3 - 6 años", "6 - 12 años", "12 - 18 años", "18 - 35 años", "35 - 60 años", "60+ años"]
+        # Panel Izq
+        self.left_card = ctk.CTkFrame(self, fg_color=WHITE_CARD, corner_radius=15, border_color=BORDER_COLOR, border_width=1)
+        self.left_card.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self.left_card.grid_rowconfigure(0, weight=1) 
+        self.left_card.grid_columnconfigure(0, weight=1)
 
-    # --- PANEL IZQUIERDO: FORMULARIO ---
-    def create_form_panel(self):
-        self.form_panel = ctk.CTkFrame(self.content_frame, fg_color=WHITE_FRAME, corner_radius=15, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH)
-        self.form_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 20), pady=10) 
+        self.scroll = ctk.CTkScrollableFrame(self.left_card, fg_color="transparent")
+        self.scroll.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.scroll.grid_columnconfigure(0, weight=1)
         
-        # Header
-        header_form = ctk.CTkFrame(self.form_panel, fg_color="transparent")
-        header_form.pack(fill="x", padx=30, pady=(20, 10))
-        ctk.CTkLabel(header_form, text=" 📅 Agendar Nueva Cita", font=ctk.CTkFont(size=18, weight="bold"), text_color=ACCENT_BLUE, anchor="w").pack(fill="x")
-        ctk.CTkLabel(header_form, text="Completa el formulario para agendar tu cita", font=ctk.CTkFont(size=13), text_color="#6B6B6B", anchor="w").pack(fill="x")
+        self.bottom_frame = ctk.CTkFrame(self.left_card, fg_color="transparent", height=70)
+        self.bottom_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=(0, 10))
+        self.bottom_frame.grid_columnconfigure((0, 1), weight=1)
 
-        # Scroll Wrapper
-        scroll_wrapper = ctk.CTkFrame(self.form_panel, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH, corner_radius=8)
-        scroll_wrapper.pack(fill="both", expand=True, padx=30, pady=(10, 30))
-        
-        self.inner_form_frame = ctk.CTkScrollableFrame(scroll_wrapper, fg_color="transparent")
-        self.inner_form_frame.pack(fill="both", expand=True, padx=0, pady=0)
-        self.inner_form_frame.grid_columnconfigure((0, 1), weight=1)
-        
-        doctoras = self.controller.obtener_doctoras()
-        
-        # 1. Nombre
-        self.entry_nombre = self._add_form_field(self.inner_form_frame, "Nombre Completo *", "Ingresa tu nombre completo", 0, 0)
-        
-        # 2. Edad
-        self.age_var = ctk.StringVar(value=self._obtener_rangos_edad()[0])
-        self._add_form_dropdown(self.inner_form_frame, "Rango de Edad *", self._obtener_rangos_edad(), 0, 1, variable=self.age_var)
-        
-        # 3. Tratamiento Previo
-        self.tratamiento_previo_var = ctk.StringVar(value="Selecciona una opción")
-        self._add_form_dropdown(self.inner_form_frame, "¿Tratamiento previo? *", ["Selecciona una opción", "Sí", "No"], 2, 0, variable=self.tratamiento_previo_var, command=self.toggle_prev_treatment)
-        self.prev_treatment_frame = ctk.CTkFrame(self.inner_form_frame, fg_color="transparent")
-        
-        # 4. Doctora
-        self.doctora_var = ctk.StringVar(value="Selecciona una doctora")
-        self._add_form_dropdown(self.inner_form_frame, "Doctora encargada *", ["Selecciona una doctora"] + doctoras, 2, 1, variable=self.doctora_var)
-        
-        # 5. FECHA Y HORA (Nueva Sección)
-        self._create_date_time_section(self.inner_form_frame, 6) 
+        self.create_form()    
+        self.create_buttons()   
 
-        # 6. Motivo (Presupuesto)
-        self.entry_motivo = self._add_form_field(self.inner_form_frame, "Presupuesto o tratamiento *", "Ej: Brackets, Limpieza, Consulta", 8, 0, columnspan=2)
-        
-        # 7. Tipo Visita (Pago)
-        self.tipo_visita_var = ctk.StringVar(value="Presupuesto (Gratuito)")
-        self._add_form_dropdown(self.inner_form_frame, "Tipo de visita *", ["Presupuesto (Gratuito)", "Tratamiento (Con costo)"], 10, 0, columnspan=2, variable=self.tipo_visita_var, command=self.toggle_payment_info)
-        self.payment_info_frame = ctk.CTkFrame(self.inner_form_frame, fg_color="transparent")
-        
-        # 8. Notas y Recordatorio
-        self._add_notes_field(self.inner_form_frame, 12, offset=1) 
-        self._add_reminder_section(self.inner_form_frame, 14, offset=1)
+        # Panel Der
+        self.sidebar = ctk.CTkFrame(self, fg_color="transparent", width=250)
+        self.sidebar.grid(row=0, column=1, sticky="nsew", padx=(0, 20), pady=20)
+        self.create_sidebar()
 
-    # --- PANEL DERECHO: CARDS ---
-    def create_card_panel(self):
-        self.card_panel = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        self.card_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=10) 
-
-        # Tarjeta Equipo Médico
-        self._add_medical_team_card(self.card_panel, 0)
-        
-        # Tarjeta Resumen (NUEVA)
-        self._add_summary_table_card(self.card_panel, 1)
-
-    # --- LÓGICA DE FECHA Y HORA ---
-    def _create_date_time_section(self, parent, row):
-        ctk.CTkLabel(parent, text="Fecha y Hora de la Cita *", font=ctk.CTkFont(size=14, weight="bold"), anchor="w", text_color="#333333").grid(row=row, column=0, sticky="w", pady=(15, 5), padx=(0, 10))
-        
-        container = ctk.CTkFrame(parent, fg_color="transparent")
-        container.grid(row=row + 1, column=0, columnspan=2, sticky="ew", padx=0, pady=(0, 15))
-        container.grid_columnconfigure(0, weight=1)
-        container.grid_columnconfigure(1, weight=1)
-        container.grid_columnconfigure(2, weight=1)
-
-        # Botón Fecha
-        self.btn_date = ctk.CTkButton(container, text="📅 Seleccionar Fecha", height=35, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH, text_color="#6B6B6B", hover_color=SOFT_BLUE_FRAME, command=self.toggle_calendar)
-        self.btn_date.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-
-        # Hora Inicio (Con Borde)
-        wrapper_start = ctk.CTkFrame(container, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH, corner_radius=6)
-        wrapper_start.grid(row=0, column=1, sticky="ew", padx=5)
-        self.time_start_var = ctk.StringVar(value="--:--")
-        self.combo_start = ctk.CTkOptionMenu(wrapper_start, variable=self.time_start_var, values=["Selecciona Fecha"], height=33, fg_color=WHITE_FRAME, button_color=WHITE_FRAME, button_hover_color=SOFT_BLUE_FRAME, text_color="#333333", command=self.update_end_times)
-        self.combo_start.pack(fill="both", expand=True, padx=2, pady=2)
-
-        # Hora Fin (Con Borde)
-        wrapper_end = ctk.CTkFrame(container, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH, corner_radius=6)
-        wrapper_end.grid(row=0, column=2, sticky="ew", padx=(5, 0))
-        self.time_end_var = ctk.StringVar(value="--:--")
-        self.combo_end = ctk.CTkOptionMenu(wrapper_end, variable=self.time_end_var, values=["--:--"], height=33, fg_color=WHITE_FRAME, button_color=WHITE_FRAME, button_hover_color=SOFT_BLUE_FRAME, text_color="#333333")
-        self.combo_end.pack(fill="both", expand=True, padx=2, pady=2)
-
-        # Mini Calendario (Oculto por defecto)
-        self.calendar_frame = ctk.CTkFrame(parent, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH, corner_radius=8)
-        self.calendar_frame_row = row + 2 
-        self.render_mini_calendar()
-
-    def toggle_calendar(self):
-        if self.calendar_frame.winfo_ismapped():
-            self.calendar_frame.grid_forget()
-        else:
-            self.calendar_frame.grid(row=self.calendar_frame_row, column=0, columnspan=2, sticky="w", padx=0, pady=5)
-            self.calendar_frame.lift()
-
-    def render_mini_calendar(self):
-        for widget in self.calendar_frame.winfo_children():
-            widget.destroy()
-
-        # Header del Calendario
-        header = ctk.CTkFrame(self.calendar_frame, fg_color="transparent")
-        header.pack(fill="x", pady=5)
-        ctk.CTkButton(header, text="<", width=30, fg_color="transparent", text_color="black", hover_color="#EEE", command=lambda: self.change_month(-1)).pack(side="left", padx=5)
-        ctk.CTkLabel(header, text=self.current_cal_date.strftime("%B %Y").capitalize(), font=("Arial", 12, "bold")).pack(side="left", expand=True)
-        ctk.CTkButton(header, text=">", width=30, fg_color="transparent", text_color="black", hover_color="#EEE", command=lambda: self.change_month(1)).pack(side="right", padx=5)
-
-        # Días de la semana
-        days_frame = ctk.CTkFrame(self.calendar_frame, fg_color="transparent")
-        days_frame.pack(padx=5, pady=5)
-        dias_semana = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"]
-        for i, dia in enumerate(dias_semana):
-            ctk.CTkLabel(days_frame, text=dia, width=30, font=("Arial", 10, "bold"), text_color="#666").grid(row=0, column=i)
-
-        # Días numéricos
-        cal = calendar.Calendar(firstweekday=0)
-        month_days = cal.monthdayscalendar(self.current_cal_date.year, self.current_cal_date.month)
-
-        for r, week in enumerate(month_days):
-            for c, day in enumerate(week):
-                if day != 0:
-                    date_obj = datetime(self.current_cal_date.year, self.current_cal_date.month, day)
-                    is_sunday = date_obj.weekday() == 6
-                    is_past = date_obj.date() < datetime.now().date()
-                    
-                    state = "disabled" if (is_sunday or is_past) else "normal"
-                    color = "#DDDDDD" if state == "disabled" else "transparent"
-                    text_col = "#AAAAAA" if state == "disabled" else "black"
-                    
-                    if self.selected_date and date_obj.date() == self.selected_date.date():
-                        color = ACCENT_BLUE
-                        text_col = "white"
-
-                    btn = ctk.CTkButton(
-                        days_frame, text=str(day), width=30, height=25, fg_color=color, text_color=text_col,
-                        state=state, hover_color=SOFT_BLUE_FRAME if state == "normal" else "#DDDDDD",
-                        command=lambda d=date_obj: self.select_date(d)
-                    )
-                    btn.grid(row=r+1, column=c, padx=1, pady=1)
-
-    def change_month(self, amount):
-        new_month = self.current_cal_date.month + amount
-        new_year = self.current_cal_date.year
-        if new_month > 12: new_month = 1; new_year += 1
-        elif new_month < 1: new_month = 12; new_year -= 1
-        self.current_cal_date = self.current_cal_date.replace(year=new_year, month=new_month, day=1)
-        self.render_mini_calendar()
-
-    def select_date(self, date_obj):
-        self.selected_date = date_obj
-        self.btn_date.configure(text=f"📅 {date_obj.strftime('%d/%m/%Y')}", fg_color=SOFT_BLUE_FRAME, border_color=ACCENT_BLUE)
-        self.calendar_frame.grid_forget()
-        
-        # Generar horarios disponibles usando el controlador
-        horarios = self.controller.generar_horarios_disponibles(date_obj)
-        
-        if horarios:
-            self.combo_start.configure(values=horarios)
-            self.time_start_var.set(horarios[0])
-            self.update_end_times(horarios[0])
-        else:
-            self.combo_start.configure(values=["Cerrado"])
-            self.time_start_var.set("Cerrado")
-            self.combo_end.configure(values=["--:--"])
-            self.time_end_var.set("--:--")
-
-    def update_end_times(self, start_time):
-        if start_time in ["--:--", "Cerrado", "Selecciona Fecha"]: return
-        start_dt = datetime.strptime(start_time, "%H:%M")
-        possible_ends = []
-        current = start_dt + timedelta(minutes=15)
-        limit = start_dt + timedelta(hours=2) # Máx 2 horas
-        
-        # Hora cierre según día (Sábado vs Semana)
-        cierre_hora = 16 if self.selected_date and self.selected_date.weekday() == 5 else 20
-        limit_cierre = start_dt.replace(hour=cierre_hora, minute=0)
-
-        while current <= limit and current <= limit_cierre:
-            possible_ends.append(current.strftime("%H:%M"))
-            current += timedelta(minutes=15)
-        
-        self.combo_end.configure(values=possible_ends)
-        if possible_ends: self.time_end_var.set(possible_ends[0])
-
-    # --- TARJETA DE RESUMEN ---
-    def _add_summary_table_card(self, parent, row):
-        # Limpiar si ya existe (para recargar)
-        for widget in parent.grid_slaves(row=row, column=0):
-            widget.destroy()
-
-        card = ctk.CTkFrame(parent, fg_color=WHITE_FRAME, corner_radius=15, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH)
-        card.grid(row=row, column=0, sticky="ew", pady=(0, 20))
-        
-        ctk.CTkLabel(card, text=" 📊 Resumen Global", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT_BLUE, anchor="w").pack(fill="x", padx=15, pady=(15, 10))
-        ctk.CTkLabel(card, text="Estado de citas (Todas las Doctoras)", font=ctk.CTkFont(size=12), text_color="#6B6B6B", anchor="w").pack(fill="x", padx=15, pady=(0, 15))
-
-        summary_list = ctk.CTkFrame(card, fg_color="transparent")
-        summary_list.pack(fill="x", padx=15, pady=(0, 15))
-        summary_list.grid_columnconfigure(1, weight=1)
-
-        # Obtener Datos Reales
-        conteo = self.controller.obtener_datos_resumen()
-        
-        summary_data = {
-            "Total de citas": (conteo.get('Total', 0), None),
-            "Pendientes": (conteo.get('Pendiente', 0), WARNING_COLOR),
-            "En curso": (conteo.get('En curso', 0), INFO_COLOR),
-            "Completadas": (conteo.get('Completada', 0), SUCCESS_COLOR),
-            "Canceladas": (conteo.get('Cancelada', 0), DANGER_COLOR),
-        }
-
-        for i, (key, (value, color)) in enumerate(summary_data.items()):
-            item_frame = ctk.CTkFrame(summary_list, fg_color="transparent")
-            item_frame.grid(row=i, column=0, sticky="ew", pady=4)
-            item_frame.grid_columnconfigure(1, weight=1)
-            
-            # Bullet
-            col = color if color else "#333333"
-            ctk.CTkLabel(item_frame, text="●", text_color=col, font=ctk.CTkFont(size=14)).grid(row=0, column=0, padx=(0, 5), sticky="w")
-            
-            ctk.CTkLabel(item_frame, text=key, font=ctk.CTkFont(size=13), text_color="#333333", anchor="w").grid(row=0, column=1, sticky="w")
-            ctk.CTkLabel(item_frame, text=str(value), font=ctk.CTkFont(size=13, weight="bold"), text_color="#333333").grid(row=0, column=2, sticky="e", padx=5)
-
-    # --- ACCIÓN DE GUARDAR ---
-    def accion_agendar(self):
-        # Recopilar datos
-        datos = {
-            'nombre': self.entry_nombre.get(),
-            'doctora': self.doctora_var.get(),
-            'fecha': self.selected_date.strftime('%d/%m/%Y') if self.selected_date else None,
-            'fecha_obj': self.selected_date,
-            'hora': self.time_start_var.get(),
-            'motivo': self.entry_motivo.get(),
-            'notas': self.notes_textbox.get("1.0", "end-1c")
-        }
-        
-        exito, mensaje = self.controller.guardar_cita(datos)
-        
-        if exito:
-            messagebox.showinfo("Éxito", mensaje)
-            # Recargar el resumen para mostrar el +1
-            self._add_summary_table_card(self.card_panel, 1)
-            # Limpiar formulario (opcional)
-            self.entry_nombre.delete(0, 'end')
-            self.entry_motivo.delete(0, 'end')
-            self.notes_textbox.delete("1.0", "end")
-        else:
-            messagebox.showerror("Error", mensaje)
-
-    # --- HELPERS ---
-    def _add_medical_team_card(self, parent, row):
-        card = ctk.CTkFrame(parent, fg_color=WHITE_FRAME, corner_radius=15, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH)
-        card.grid(row=row, column=0, sticky="ew", pady=(10, 20))
-        ctk.CTkLabel(card, text=" ⚕️ Nuestro Equipo Médico", font=ctk.CTkFont(size=15, weight="bold"), text_color=ACCENT_BLUE, anchor="w").pack(fill="x", padx=15, pady=(15, 10))
-        
-        for doc_info in self.controller.obtener_doctoras():
-            name, specialty = doc_info.split(" (")
-            specialty = specialty.replace(")", "")
-            
-            f = ctk.CTkFrame(card, fg_color="transparent")
-            f.pack(fill="x", padx=15, pady=5)
-            
-            full_name = f"{name} ({specialty})"
-            img = load_doctor_image(full_name)
-            if img: ctk.CTkLabel(f, text="", image=img).pack(side="left", padx=(0, 10))
-            else: ctk.CTkLabel(f, text="👩‍⚕️", font=ctk.CTkFont(size=24)).pack(side="left", padx=(0, 10))
-            
-            info = ctk.CTkFrame(f, fg_color="transparent")
-            info.pack(side="left")
-            ctk.CTkLabel(info, text=name, font=("Arial", 12, "bold"), text_color="#333").pack(anchor="w")
-            ctk.CTkLabel(info, text=specialty, font=("Arial", 11), text_color=ACCENT_BLUE).pack(anchor="w")
-
-    def toggle_prev_treatment(self, choice):
-        for w in self.prev_treatment_frame.winfo_children(): w.destroy()
-        if choice == "Sí":
-            self.prev_treatment_frame.grid(row=4, column=0, columnspan=2, sticky="ew")
-            ctk.CTkLabel(self.prev_treatment_frame, text="Describe tu tratamiento previo *", font=("Arial", 14, "bold"), anchor="w", text_color="#333").pack(fill="x", pady=(15, 5))
-            ctk.CTkEntry(self.prev_treatment_frame, placeholder_text="Ej: Brackets", height=35, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH).pack(fill="x", pady=(0, 15))
-        else:
-            self.prev_treatment_frame.grid_forget()
-
-    def toggle_payment_info(self, choice):
-        if choice == "Tratamiento (Con costo)":
-            self.payment_info_frame.grid(row=12, column=0, columnspan=2, sticky="ew")
-            self.payment_info_frame.lift()
-            self._add_payment_fields(self.payment_info_frame)
-        else:
-            self.payment_info_frame.grid_forget()
-            for w in self.payment_info_frame.winfo_children(): w.destroy()
-
-    def _add_payment_fields(self, parent):
+    def create_form(self):
+        parent = self.scroll
         for w in parent.winfo_children(): w.destroy()
-        pc = ctk.CTkFrame(parent, fg_color="#E9F5FF", corner_radius=10, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH)
-        pc.pack(fill="x", pady=(15, 10), padx=0)
-        ctk.CTkLabel(pc, text="Información de pago", font=("Arial", 14, "bold"), text_color="#333").pack(anchor="w", padx=15, pady=(15, 5))
-        ctk.CTkEntry(pc, placeholder_text="Costo Total", height=30, fg_color="white", border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH).pack(fill="x", padx=15, pady=5)
-        ctk.CTkEntry(pc, placeholder_text="Pago Inicial", height=30, fg_color="white", border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH).pack(fill="x", padx=15, pady=5)
-
-    def _add_form_field(self, parent, label, ph, row, col, columnspan=1):
-        ctk.CTkLabel(parent, text=label, font=("Arial", 14, "bold"), text_color="#333").grid(row=row, column=col, sticky="w", pady=(15, 5), padx=(0, 10))
-        e = ctk.CTkEntry(parent, placeholder_text=ph, height=35, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH)
-        e.grid(row=row+1, column=col, sticky="ew", padx=(0, 10), pady=(0, 15), columnspan=columnspan)
-        return e
-
-    def _add_form_dropdown(self, parent, label, vals, row, col, columnspan=1, variable=None, command=None):
-        ctk.CTkLabel(parent, text=label, font=("Arial", 14, "bold"), text_color="#333").grid(row=row, column=col, sticky="w", pady=(15, 5), padx=(0, 10))
-        w = ctk.CTkFrame(parent, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH, corner_radius=6)
-        w.grid(row=row+1, column=col, sticky="ew", padx=(0, 10), pady=(0, 15), columnspan=columnspan)
-        ctk.CTkOptionMenu(w, values=vals, height=35, fg_color=WHITE_FRAME, button_color=WHITE_FRAME, button_hover_color=SOFT_BLUE_FRAME, text_color="#6B6B6B", variable=variable, command=command).pack(fill="both", expand=True, padx=6, pady=2)
-
-    def _add_notes_field(self, parent, row, offset=0):
-        ctk.CTkLabel(parent, text="Notas adicionales", font=("Arial", 14, "bold"), text_color="#333").grid(row=row+offset, column=0, columnspan=2, sticky="w", pady=(15, 5))
-        nc = ctk.CTkFrame(parent, fg_color=WHITE_FRAME, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH, corner_radius=6)
-        nc.grid(row=row+1+offset, column=0, columnspan=2, sticky="ew", pady=(0, 15))
-        self.notes_textbox = ctk.CTkTextbox(nc, height=80, fg_color=WHITE_FRAME, wrap="word")
-        self.notes_textbox.pack(fill="both", padx=1, pady=1)
-        self.placeholder_label = ctk.CTkLabel(nc, text="Información adicional...", text_color="#AAAAAA", font=("Arial", 14, "italic"))
-        self.placeholder_label.place(x=10, y=10)
-        self.notes_textbox.bind("<FocusIn>", lambda e: self.placeholder_label.place_forget())
-        self.notes_textbox.bind("<FocusOut>", lambda e: self.placeholder_label.place(x=10, y=10) if not self.notes_textbox.get("1.0", "end-1c").strip() else None)
-
-    def _add_reminder_section(self, parent, row, offset=0):
-        rf = ctk.CTkFrame(parent, fg_color=WHITE_FRAME, corner_radius=10, border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH)
-        rf.grid(row=row+offset, column=0, columnspan=2, sticky="ew", pady=(20, 10))
-        rf.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(rf, text=" 🔔 Recordatorio de cita", font=("Arial", 14), text_color="#333").grid(row=0, column=0, sticky="w", padx=20, pady=10)
-        self.reminder_switch = ctk.CTkSwitch(rf, text="", command=self.toggle_contact_info, progress_color=ACCENT_BLUE)
-        self.reminder_switch.grid(row=0, column=1, sticky="e", padx=20, pady=10)
         
-        self.contact_info_container = ctk.CTkFrame(parent, fg_color="transparent")
-        
-        # Botón Agendar - CONECTADO
-        ctk.CTkButton(parent, text=" 🕒 Agendar Cita", height=45, corner_radius=10, fg_color=ACCENT_BLUE, font=("Arial", 16, "bold"), command=self.accion_agendar).grid(row=row+2+offset, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        c = ctk.CTkFrame(parent, fg_color="transparent")
+        c.pack(fill="x", expand=True, padx=5, pady=2)
+        c.grid_columnconfigure((0, 1), weight=1)
 
-    def toggle_contact_info(self):
-        if self.reminder_switch.get() == 1:
-            self.contact_info_container.grid(row=16, column=0, columnspan=2, sticky="ew")
-            for w in self.contact_info_container.winfo_children(): w.destroy()
-            cf = ctk.CTkFrame(self.contact_info_container, fg_color="#E9F5FF", border_color=VISIBLE_BORDER, border_width=DEFAULT_BORDER_WIDTH)
-            cf.pack(fill="x", pady=(0, 15))
-            ctk.CTkLabel(cf, text="Contacto", font=("Arial", 13, "bold"), text_color="#333").pack(anchor="w", padx=20, pady=10)
-            ctk.CTkEntry(cf, placeholder_text="Teléfono", fg_color="white").pack(fill="x", padx=20, pady=5)
-            ctk.CTkEntry(cf, placeholder_text="Email", fg_color="white").pack(fill="x", padx=20, pady=5)
+        r = 0 
+        ctk.CTkLabel(c, text="📅 Nueva Cita", font=("Segoe UI", 22, "bold"), text_color=ACCENT_BLUE).grid(row=r, column=0, columnspan=2, sticky="w", pady=(0, 5)); r+=1
+
+        self.modo_var = ctk.StringVar(value="Nuevo Paciente")
+        self.seg = ctk.CTkSegmentedButton(c, values=["Nuevo Paciente", "Paciente Existente"], variable=self.modo_var, command=self.cambiar_modo, selected_color=ACCENT_BLUE)
+        self.seg.grid(row=r, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 5)); r+=1
+
+        self.frame_bus = ctk.CTkFrame(c, fg_color="#E3F2FD", corner_radius=8, border_color=ACCENT_BLUE, border_width=1)
+        self.frame_bus.grid(row=r, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 5))
+        self.frame_bus.grid_columnconfigure(0, weight=1)
+        self.frame_bus.grid_remove()
+        
+        self.ent_bus = ctk.CTkEntry(self.frame_bus, placeholder_text="🔍 Buscar nombre/teléfono...")
+        self.ent_bus.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        self.ent_bus.bind("<KeyRelease>", self.filtrar_pac)
+        self.lst_res = ctk.CTkOptionMenu(self.frame_bus, values=["Escribe..."], command=self.selec_pac, fg_color="white", text_color="#333", button_color="#CCC")
+        self.lst_res.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
+        r+=1 
+
+        self._title(c, "INFORMACIÓN PERSONAL", r); r+=1
+        self.ent_nom = ctk.CTkEntry(c, placeholder_text="Nombre Completo *", height=35, border_color=BORDER_COLOR, fg_color="#FAFAFA")
+        self.ent_nom.grid(row=r, column=0, sticky="ew", padx=10, pady=(0, 5))
+        
+        frm_mix = ctk.CTkFrame(c, fg_color="transparent", height=35)
+        frm_mix.grid(row=r, column=1, sticky="ew", padx=10, pady=(0, 5))
+        frm_mix.grid_columnconfigure((0,1), weight=1)
+        self.cmb_edad = ctk.CTkOptionMenu(frm_mix, values=["Edad", "0-3", "3-6", "6-12", "12-18", "18-35", "35-60", "60+"], height=35, fg_color="#FAFAFA", text_color=TEXT_DARK, button_color="#CCC")
+        self.cmb_edad.pack(side="left", fill="x", expand=True, padx=(0,5))
+        self.cmb_gen = ctk.CTkOptionMenu(frm_mix, values=["Género", "Femenino", "Masculino"], height=35, fg_color="#FAFAFA", text_color=TEXT_DARK, button_color="#CCC")
+        self.cmb_gen.pack(side="left", fill="x", expand=True, padx=(5,0))
+        r+=1
+
+        self._sep(c, r); r+=1
+
+        self._title(c, "ESPECIALISTA Y ANTECEDENTES", r); r+=1
+        docs = ["Selecciona Doctora"] + self.controller.obtener_lista_nombres_doctoras()
+        self.cmb_doc = ctk.CTkOptionMenu(c, values=docs, command=self.al_cambiar_doc, fg_color="#FAFAFA", text_color=TEXT_DARK, button_color="#CCC")
+        self.cmb_doc.grid(row=r, column=0, sticky="ew", padx=(10, 5), pady=2)
+        
+        frm_prev = ctk.CTkFrame(c, fg_color="transparent")
+        frm_prev.grid(row=r, column=1, sticky="ew", padx=(5, 10))
+        self.cmb_prev = ctk.CTkOptionMenu(frm_prev, values=["Tratamiento previo: No", "Tratamiento previo: Sí"], command=self.toggle_prev, fg_color="#FAFAFA", text_color=TEXT_DARK, button_color="#CCC")
+        self.cmb_prev.pack(side="left", fill="x", expand=True)
+        self.ent_prev = ctk.CTkEntry(frm_prev, placeholder_text="¿Cuál?", width=80, fg_color="#FAFAFA", border_color="#CCC")
+        r+=1
+
+        self._sep(c, r); r+=1
+
+        # --- FECHA Y DURACIÓN (DIVIDIDO) ---
+        self._title(c, "FECHA Y DURACIÓN", r); r+=1
+        frm_dt = ctk.CTkFrame(c, fg_color="transparent")
+        frm_dt.grid(row=r, column=0, columnspan=2, sticky="ew", padx=10)
+        frm_dt.grid_columnconfigure(0, weight=0); frm_dt.grid_columnconfigure(1, weight=1)
+        
+        self.cal_frame = ctk.CTkFrame(frm_dt, fg_color="white", border_color="#DDD", border_width=1)
+        self.cal_frame.grid(row=0, column=0, sticky="n", padx=(0, 15), ipady=5)
+        self.render_calendar()
+
+        frm_tm = ctk.CTkFrame(frm_dt, fg_color="transparent")
+        frm_tm.grid(row=0, column=1, sticky="nsew")
+        
+        # 1. SELECTOR HORA (DIVIDIDO: HORA | MINUTO)
+        ctk.CTkLabel(frm_tm, text="1. Hora de Inicio", font=("Arial", 11, "bold"), text_color="#555").pack(anchor="w", pady=(0,2))
+        
+        frm_reloj = ctk.CTkFrame(frm_tm, fg_color="transparent")
+        frm_reloj.pack(fill="x", pady=(0, 10))
+        
+        # Hora (Ej. 11 AM)
+        self.cmb_h = ctk.CTkOptionMenu(frm_reloj, values=["--"], width=95, command=self.al_seleccionar_hora_h, fg_color="#E8F0FE", text_color="black")
+        self.cmb_h.pack(side="left", padx=(0, 5))
+        
+        # Minuto (Ej. 05, 10)
+        self.cmb_m = ctk.CTkOptionMenu(frm_reloj, values=["--"], width=95, command=self.al_seleccionar_min_m, fg_color="#E8F0FE", text_color="black")
+        self.cmb_m.pack(side="left")
+        
+        # 2. Duración (SLIDER)
+        ctk.CTkLabel(frm_tm, text="2. Duración Estimada", font=("Arial", 11, "bold"), text_color="#555").pack(anchor="w", pady=(0,2))
+        self.lbl_dur_val = ctk.CTkLabel(frm_tm, text="30 min", font=("Arial", 13, "bold"), text_color=ACCENT_BLUE)
+        self.lbl_dur_val.pack(anchor="w")
+        
+        self.slider_dur = ctk.CTkSlider(frm_tm, from_=5, to=300, number_of_steps=59, command=self.actualizar_slider)
+        self.slider_dur.set(30)
+        self.slider_dur.pack(fill="x", pady=(0, 5))
+        
+        # 3. Finaliza
+        self.lbl_fin_hora = ctk.CTkLabel(frm_tm, text="Finaliza a las: --:--", font=("Arial", 11), text_color="#555")
+        self.lbl_fin_hora.pack(anchor="w", pady=(5,0))
+        r+=1
+
+        self._sep(c, r); r+=1
+
+        self._title(c, "DETALLES", r); r+=1
+        self.tipo_var = ctk.StringVar(value="Presupuesto")
+        ctk.CTkSegmentedButton(c, values=["Presupuesto (Gratuito)", "Tratamiento"], variable=self.tipo_var, command=self.toggle_serv, selected_color=ACCENT_BLUE).grid(row=r, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 5)); r+=1
+        
+        self.frm_serv = ctk.CTkFrame(c, fg_color="#FAFAFA", border_color="#EEE", border_width=1)
+        self.frm_serv.grid(row=r, column=0, columnspan=2, sticky="ew", padx=10)
+        self.frm_serv.grid_remove() 
+        
+        ctk.CTkButton(self.frm_serv, text="+ Agregar Servicio", fg_color="transparent", border_color=ACCENT_BLUE, border_width=1, text_color=ACCENT_BLUE, command=self.abrir_servicios).pack(fill="x", padx=10, pady=5)
+        self.lst_serv = ctk.CTkFrame(self.frm_serv, fg_color="transparent")
+        self.lst_serv.pack(fill="x", padx=10, pady=5)
+        self.lbl_tot = ctk.CTkLabel(self.frm_serv, text="Total: $0.00", font=("Arial", 12, "bold"), text_color=SUCCESS_COLOR)
+        self.lbl_tot.pack(anchor="e", padx=10, pady=5)
+        r+=1
+
+        self._sep(c, r); r+=1
+        r = self.create_contact(c, r)
+        self._sep(c, r); r+=1
+
+        self._title(c, "ADICIONALES", r); r+=1
+        self.frm_nota = ctk.CTkFrame(c, fg_color="#FAFAFA", border_color="#CCC", border_width=1, corner_radius=6)
+        self.frm_nota.grid(row=r, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 10))
+        self.frm_nota.grid_columnconfigure(0, weight=1); self.frm_nota.grid_rowconfigure(0, weight=1)
+        self.txt_nota = ctk.CTkTextbox(self.frm_nota, height=60, fg_color="#FAFAFA", wrap="word", font=("Segoe UI", 12))
+        self.txt_nota.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        self.lbl_ph = ctk.CTkLabel(self.txt_nota, text="Notas importantes...", text_color="#999", font=("Segoe UI", 12, "italic"))
+        self.lbl_ph.place(x=5, y=5)
+        self.txt_nota.bind("<FocusIn>", lambda e: self.lbl_ph.place_forget())
+        self.txt_nota.bind("<FocusOut>", self.chk_ph)
+
+    # --- LÓGICA DE TIEMPO Y SLIDER ---
+    def act_horarios(self):
+        """Llena los combos divididos buscando 5 en 5 min."""
+        doc = self.cmb_doc.get()
+        if not self.selected_date or "Selecciona" in doc: return
+        
+        raw_slots = self.controller.obtener_horas_inicio_disponibles(self.selected_date, doc)
+        self.mapa_horarios = {}
+        
+        if not raw_slots:
+            self.cmb_h.configure(values=["Lleno"]); self.cmb_h.set("Lleno")
+            self.cmb_m.configure(values=["--"]); self.cmb_m.set("--")
+            return
+
+        # Parsear lista: "11:05 AM" -> H="11 AM", M="05"
+        for slot in raw_slots:
+            parts = slot.split(":") 
+            hora_num = parts[0]
+            resto = parts[1].split(" ")
+            minu = resto[0]
+            ampm = resto[1]
+            
+            k = f"{hora_num} {ampm}"
+            if k not in self.mapa_horarios: self.mapa_horarios[k] = []
+            self.mapa_horarios[k].append(minu)
+
+        # Llenar Combo Horas
+        horas = list(self.mapa_horarios.keys())
+        self.cmb_h.configure(values=horas)
+        self.cmb_h.set(horas[0])
+        self.al_seleccionar_hora_h(horas[0])
+
+    def al_seleccionar_hora_h(self, hora_sel):
+        minutos = self.mapa_horarios.get(hora_sel, ["--"])
+        self.cmb_m.configure(values=minutos)
+        self.cmb_m.set(minutos[0])
+        self.calcular_hora_final()
+
+    def al_seleccionar_min_m(self, m):
+        self.calcular_hora_final()
+
+    def actualizar_slider(self, val):
+        m = int(val)
+        if m < 60: txt = f"{m} min"
         else:
-            self.contact_info_container.grid_forget()
+            h = m // 60; mn = m % 60
+            txt = f"{h} h {mn:02d} min" if mn > 0 else f"{h} horas"
+        self.lbl_dur_val.configure(text=txt)
+        self.calcular_hora_final()
+
+    def calcular_hora_final(self):
+        h_txt = self.cmb_h.get()
+        m_txt = self.cmb_m.get()
+        if "Lleno" in h_txt or "--" in m_txt:
+            self.lbl_fin_hora.configure(text="Finaliza: --:--")
+            return
+        try:
+            # Reconstruir "11:05 AM"
+            parts = h_txt.split(" ")
+            full_str = f"{parts[0]}:{m_txt} {parts[1]}"
+            inicio = datetime.strptime(full_str, "%I:%M %p")
+            dur = int(self.slider_dur.get())
+            fin = inicio + timedelta(minutes=dur)
+            self.lbl_fin_hora.configure(text=f"Finaliza: {fin.strftime('%I:%M %p').lstrip('0').replace(' 0',' ')}")
+        except: 
+            self.lbl_fin_hora.configure(text="Finaliza: --:--")
+
+    # --- HELPERS RESTANTES ---
+    def al_cambiar_doc(self, _):
+        if "Selecciona" in self.cmb_doc.get(): 
+            self.cmb_h.set("--"); self.cmb_m.set("--")
+        elif not self.selected_date: 
+            pass # Espera fecha
+        else: self.act_horarios()
+
+    def _sep(self, p, r): ctk.CTkFrame(p, height=1, fg_color="#E0E0E0").grid(row=r, column=0, columnspan=2, sticky="ew", pady=(8, 0), padx=10)
+    def _title(self, p, t, r): ctk.CTkLabel(p, text=t, font=("Segoe UI", 11, "bold"), text_color="#999").grid(row=r, column=0, columnspan=2, sticky="w", padx=10, pady=(8, 2))
+    
+    def create_contact(self, p, r):
+        self._title(p, "CONTACTO Y NOTIFICACIONES", r); r+=1
+        f = ctk.CTkFrame(p, fg_color="transparent")
+        f.grid(row=r, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 5)); r+=1
+        f.grid_columnconfigure((0,1), weight=1)
+        self.ent_tel = ctk.CTkEntry(f, placeholder_text="Teléfono (WhatsApp) *", fg_color="#FAFAFA", border_color="#CCC")
+        self.ent_tel.grid(row=0, column=0, sticky="ew", padx=(0,5))
+        self.ent_email = ctk.CTkEntry(f, placeholder_text="Email (Opcional)", fg_color="#FAFAFA", border_color="#CCC")
+        self.ent_email.grid(row=0, column=1, sticky="ew", padx=(5,0))
+        self.var_notif = ctk.BooleanVar(value=True)
+        ctk.CTkSwitch(p, text="Recordatorios activos", variable=self.var_notif, progress_color=SUCCESS_COLOR).grid(row=r, column=0, columnspan=2, sticky="w", padx=20, pady=5); r+=1
+        return r
+    
+    def chk_ph(self, e): 
+        if not self.txt_nota.get("1.0", "end-1c").strip(): self.lbl_ph.place(x=5, y=5)
+
+    def create_buttons(self):
+        for w in self.bottom_frame.winfo_children(): w.destroy()
+        ctk.CTkButton(self.bottom_frame, text="🔄 Limpiar", font=("Segoe UI", 12, "bold"), fg_color=SOFT_BLUE_BTN, hover_color="#76BEE0", width=80, height=50, command=self.reset).pack(side="left", padx=(25,5), pady=10)
+        ctk.CTkButton(self.bottom_frame, text="CONFIRMAR CITA", font=("Segoe UI", 15, "bold"), fg_color=ACCENT_BLUE, hover_color="#0056b3", height=50, command=self.guardar).pack(side="left", fill="x", expand=True, padx=(5,25), pady=10)
+
+    # --- LÓGICA GENERAL ---
+    def cambiar_modo(self, m):
+        if m == "Paciente Existente":
+            self.frame_bus.grid()
+            self.ent_nom.configure(placeholder_text="Busca arriba para rellenar...")
+        else:
+            self.frame_bus.grid_remove()
+            self.limpiar_per(); self.cliente_existente_id = None
+            self.ent_nom.configure(state="normal", placeholder_text="Nombre Completo *")
+
+    def filtrar_pac(self, e):
+        q = self.ent_bus.get()
+        if len(q) < 3: return
+        res = self.controller.buscar_pacientes_existentes(q)
+        self.mapa_pacientes_temp = {f"{r['nombre_completo']} ({r['telefono']})": r for r in res}
+        vals = list(self.mapa_pacientes_temp.keys()) or ["Sin resultados"]
+        self.lst_res.configure(values=vals); self.lst_res.set("Seleccionar...")
+
+    def selec_pac(self, s):
+        d = self.mapa_pacientes_temp.get(s)
+        if d:
+            self.cliente_existente_id = d['id']
+            self.ent_nom.delete(0, 'end'); self.ent_nom.insert(0, d['nombre_completo'])
+            self.ent_tel.delete(0, 'end'); self.ent_tel.insert(0, d['telefono'] or "")
+            self.ent_email.delete(0, 'end'); self.ent_email.insert(0, d['email'] or "")
+            if d['rango_edad']: self.cmb_edad.set(d['rango_edad'])
+            if d['genero']: self.cmb_gen.set("Masculino" if d['genero']=='m' else "Femenino")
+
+    def guardar(self):
+        try:
+            nota = self.txt_nota.get("1.0", "end-1c").strip()
+            errs = []
+            if not self.ent_nom.get().strip(): errs.append("• Nombre del Paciente")
+            if self.cmb_edad.get() == "Edad": errs.append("• Edad") 
+            if self.cmb_gen.get() == "Género": errs.append("• Género") 
+            if "Selecciona" in self.cmb_doc.get(): errs.append("• Doctora")
+            if not self.selected_date: errs.append("• Fecha")
+            if "Lleno" in self.cmb_h.get() or "--" in self.cmb_m.get(): errs.append("• Hora")
+            
+            if errs: 
+                messagebox.showwarning("Datos Incompletos", "Por favor corrige:\n\n" + "\n".join(errs))
+                return
+
+            gen = {"Masculino": "m", "Femenino": "f"}.get(self.cmb_gen.get(), "f")
+            
+            # Reconstruir Hora
+            h_sel = self.cmb_h.get().split(" ") # ["11", "AM"]
+            m_sel = self.cmb_m.get()
+            hora_final_str = f"{h_sel[0]}:{m_sel} {h_sel[1]}"
+
+            dur_txt = self.lbl_dur_val.cget("text")
+            
+            datos = {
+                'cliente_id_existente': self.cliente_existente_id,
+                'nombre': self.ent_nom.get().strip(),
+                'genero': gen, 'edad': self.cmb_edad.get(),
+                'telefono': self.ent_tel.get().strip(), 'email': self.ent_email.get().strip(),
+                'descripcion': nota, 'doctora': self.cmb_doc.get(),
+                'fecha': self.selected_date.strftime("%Y-%m-%d"),
+                'hora_inicio': hora_final_str, # Enviamos string construido
+                'duracion': dur_txt,
+                'tipo_cita': self.tipo_var.get(), 'notificar': self.var_notif.get(),
+                'previo_desc': self.ent_prev.get() if "Sí" in self.cmb_prev.get() else ""
+            }
+            
+            ok, msg = self.controller.guardar_cita_completa(datos, self.servicios_agregados)
+            if ok: 
+                messagebox.showinfo("Éxito", msg)
+                self.reset()
+                self.create_sidebar()
+            else: messagebox.showerror("Error", msg)
+        except Exception as e: messagebox.showerror("Error", str(e))
+
+    def reset(self):
+        self.limpiar_per()
+        self.ent_prev.delete(0, 'end'); self.ent_bus.delete(0, 'end')
+        self.cmb_doc.set("Selecciona Doctora")
+        self.cmb_h.set("--"); self.cmb_m.set("--")
+        self.cmb_prev.set("Tratamiento previo: No")
+        self.txt_nota.delete("1.0", "end"); self.chk_ph(None)
+        
+        self.slider_dur.set(30); self.actualizar_slider(30)
+        
+        self.cliente_existente_id = None; self.selected_date = None
+        self.servicios_agregados = []
+        self.actualizar_servicios()
+        self.tipo_var.set("Presupuesto"); self.modo_var.set("Nuevo Paciente")
+        self.cambiar_modo("Nuevo Paciente"); self.toggle_serv("Presupuesto")
+        self.render_calendar(); self.toggle_prev("No")
+
+    def limpiar_per(self):
+        self.ent_nom.delete(0, 'end'); self.ent_tel.delete(0, 'end')
+        self.ent_email.delete(0, 'end'); self.cmb_edad.set("Edad"); self.cmb_gen.set("Género")
+
+    def toggle_serv(self, v):
+        # SIEMPRE mostramos la lista si hay items, solo cambiamos etiquetas
+        self.frm_serv.grid() # Siempre visible el contenedor base
+        
+        if v == "Presupuesto":
+            # Modo informativo: Ocultamos totales visualmente o cambiamos color
+            self.lbl_tot.configure(text="Total Estimado (No genera deuda): $0.00", text_color="gray")
+            # Opcional: Podrías iterar sobre los labels de precio y ponerlos en gris
+        else:
+            # Modo Tratamiento: Recalcular total real
+            self.actualizar_ui_servicios()
+    
+    def toggle_prev(self, v):
+        if "Sí" in v: self.ent_prev.pack(side="left", fill="x", padx=(5,0), expand=True)
+        else: self.ent_prev.pack_forget()
+
+    def render_calendar(self):
+        for w in self.cal_frame.winfo_children(): w.destroy()
+        cal = calendar.Calendar(firstweekday=6)
+        md = cal.monthdayscalendar(self.display_date.year, self.display_date.month)
+        hoy = datetime.now()
+
+        h = ctk.CTkFrame(self.cal_frame, fg_color=HEADER_CALENDAR, corner_radius=5)
+        h.pack(fill="x", pady=(0,5))
+        ctk.CTkButton(h, text="<", width=25, fg_color="transparent", text_color=ACCENT_BLUE, hover_color="white", command=lambda: self.chg_month(-1)).pack(side="left")
+        ctk.CTkLabel(h, text=self.display_date.strftime("%B %Y").capitalize(), font=("Arial", 12, "bold"), text_color="#333").pack(side="left", expand=True)
+        ctk.CTkButton(h, text=">", width=25, fg_color="transparent", text_color=ACCENT_BLUE, hover_color="white", command=lambda: self.chg_month(1)).pack(side="right")
+        
+        g = ctk.CTkFrame(self.cal_frame, fg_color="transparent")
+        g.pack(padx=5)
+        for i, d in enumerate(["Do","Lu","Ma","Mi","Ju","Vi","Sa"]): 
+            ctk.CTkLabel(g, text=d, font=("Arial",9,"bold"), width=30, text_color="#666").grid(row=0, column=i)
+        
+        for r, w in enumerate(md):
+            for c, d in enumerate(w):
+                if d == 0: continue
+                dt_celda = datetime(self.display_date.year, self.display_date.month, d)
+                es_pasado = dt_celda.date() < hoy.date()
+                es_hoy = dt_celda.date() == hoy.date()
+                es_sel = self.selected_date and dt_celda.date() == self.selected_date.date()
+
+                bg = ACCENT_BLUE if es_sel else "white"
+                fg = "white" if es_sel else ("#DDD" if es_pasado else "#333")
+                state = "disabled" if es_pasado else "normal"
+                border_c = "black" if es_hoy else ("#EEE" if not es_sel else ACCENT_BLUE)
+                b_width = 2 if es_hoy else 1
+
+                ctk.CTkButton(g, text=str(d), width=30, height=28, fg_color=bg, text_color=fg, border_color=border_c, border_width=b_width, state=state, font=("Arial", 11, "bold" if es_hoy else "normal"), corner_radius=6, hover_color="#D9EFFF" if state == "normal" else "white", command=lambda x=d: self.sel_day(x)).grid(row=r+1, column=c, padx=2, pady=2)
+
+    def chg_month(self, s):
+        m = self.display_date.month + s; y = self.display_date.year
+        if m > 12: m=1; y+=1
+        elif m < 1: m=12; y-=1
+        self.display_date = self.display_date.replace(year=y, month=m, day=1)
+        self.render_calendar()
+
+    def sel_day(self, d):
+        self.selected_date = datetime(self.display_date.year, self.display_date.month, d)
+        self.render_calendar(); self.act_horarios()
+
+    def create_sidebar(self):
+        for w in self.sidebar.winfo_children(): w.destroy()
+        c1 = ctk.CTkFrame(self.sidebar, fg_color=WHITE_CARD, corner_radius=10, border_color=BORDER_COLOR, border_width=1)
+        c1.pack(fill="x", pady=(0, 15))
+        ctk.CTkLabel(c1, text="🏥 Equipo Médico", font=("Segoe UI", 13, "bold"), text_color=ACCENT_BLUE).pack(pady=10, padx=15, anchor="w")
+        for n, d in self.controller.obtener_info_doctoras().items():
+            r = ctk.CTkFrame(c1, fg_color="transparent"); r.pack(fill="x", padx=10, pady=2)
+            try: ctk.CTkLabel(r, text="", image=ctk.CTkImage(Image.open(os.path.join(current_dir, d['foto'])).resize((35,35)), size=(35,35))).pack(side="left")
+            except: ctk.CTkLabel(r, text="👩‍⚕️", font=("Arial", 20)).pack(side="left")
+            t = ctk.CTkFrame(r, fg_color="transparent"); t.pack(side="left", padx=5)
+            ctk.CTkLabel(t, text=n, font=("Segoe UI", 12, "bold")).pack(anchor="w")
+            ctk.CTkLabel(t, text=d['especialidad'], font=("Segoe UI", 11), text_color=ACCENT_BLUE).pack(anchor="w")
+        
+        c2 = ctk.CTkFrame(self.sidebar, fg_color=WHITE_CARD, corner_radius=10, border_color=BORDER_COLOR, border_width=1)
+        c2.pack(fill="x")
+        ctk.CTkLabel(c2, text=f"📊 Resumen Hoy", font=("Segoe UI", 13, "bold"), text_color=ACCENT_BLUE).pack(pady=10, padx=15, anchor="w")
+        st = self.controller.obtener_resumen_citas()
+        for l, c, col in [("Pendientes", st.get('Pendiente',0), WARNING_COLOR), ("En curso", st.get('En curso',0), INFO_COLOR), ("Completadas", st.get('Completada',0), SUCCESS_COLOR), ("Canceladas", st.get('Cancelada',0), DANGER_COLOR)]:
+            r = ctk.CTkFrame(c2, fg_color="transparent"); r.pack(fill="x", padx=15, pady=2)
+            ctk.CTkLabel(r, text="●", text_color=col).pack(side="left")
+            ctk.CTkLabel(r, text=l, font=("Segoe UI", 12)).pack(side="left", padx=5)
+            ctk.CTkLabel(r, text=str(c), font=("Segoe UI", 12, "bold")).pack(side="right")
+
+    def abrir_servicios(self):
+        try:
+            top = ctk.CTkToplevel(self)
+            top.title("Catálogo de Tratamientos"); top.geometry("1000x600")
+            top.transient(self.winfo_toplevel()); top.grab_set(); top.lift(); top.focus_force()
+
+            filter_frame = ctk.CTkFrame(top, fg_color="transparent"); filter_frame.pack(fill="x", padx=15, pady=10)
+            ctk.CTkLabel(filter_frame, text="Categoría:", font=("bold", 11)).pack(side="left")
+            cats = ["Todas"] + self.controller.obtener_categorias_unicas()
+            combo_cat = ctk.CTkOptionMenu(filter_frame, values=cats, width=180); combo_cat.pack(side="left", padx=5)
+            
+            ctk.CTkLabel(filter_frame, text="Subcategoría:", font=("bold", 11)).pack(side="left", padx=10)
+            combo_sub = ctk.CTkOptionMenu(filter_frame, values=["Todas"], width=180); combo_sub.pack(side="left", padx=5)
+            
+            entry_search = ctk.CTkEntry(filter_frame, placeholder_text="Buscar...", width=200); entry_search.pack(side="left", padx=10)
+            ctk.CTkButton(filter_frame, text="🔄", width=40, command=lambda: reset_filtros()).pack(side="left", padx=5)
+
+            header = ctk.CTkFrame(top, fg_color="#E0E0E0", height=30); header.pack(fill="x", padx=15, pady=5)
+            ctk.CTkLabel(header, text="Servicio", width=300, anchor="w", font=("bold", 11)).pack(side="left", padx=5)
+            ctk.CTkLabel(header, text="Precio", width=100, anchor="e", font=("bold", 11)).pack(side="right", padx=20)
+
+            scroll = ctk.CTkScrollableFrame(top, fg_color="white"); scroll.pack(fill="both", expand=True, padx=15, pady=10)
+
+            def buscar(e=None):
+                for w in scroll.winfo_children(): w.destroy()
+                res = self.controller.buscar_servicios_filtros(entry_search.get(), combo_cat.get(), combo_sub.get())
+                if not res: ctk.CTkLabel(scroll, text="Sin resultados", text_color="gray").pack(pady=20); return
+                for s in res:
+                    r = ctk.CTkFrame(scroll, fg_color="transparent", height=40); r.pack(fill="x", pady=2)
+                    ctk.CTkLabel(r, text=s['nombre'], width=300, anchor="w", font=("bold", 11)).pack(side="left", padx=5)
+                    ctk.CTkButton(r, text="+", width=40, fg_color=ACCENT_BLUE, command=lambda x=s: logica_precio(x)).pack(side="right", padx=5)
+                    p = float(s['precio_base'])
+                    txt = f"${p:,.2f}" if "caso" not in s['tipo_unidad'] else "Cotizar"
+                    ctk.CTkLabel(r, text=txt, width=80, anchor="e", text_color="green").pack(side="right", padx=5)
+
+            def logica_precio(servicio):
+                import json
+                
+                # Intentar leer JSON, si falla usar precio_base simple (retrocompatibilidad)
+                opciones = {}
+                try:
+                    if servicio['opciones_json']:
+                        opciones = json.loads(servicio['opciones_json'])
+                except: pass
+                
+                # Si no hay JSON, crear opción default con lo que haya en DB
+                if not opciones:
+                    u_legacy = servicio['tipo_unidad']
+                    p_legacy = float(servicio['precio_base'])
+                    opciones = {u_legacy: p_legacy}
+
+                # CASO 1: Solo una opción
+                if len(opciones) == 1:
+                    u, p = list(opciones.items())[0]
+                    # REGLA: Si dice "caso" o precio es 0 -> Manual
+                    if "caso" in u.lower() or p == 0:
+                        pedir_manual(servicio, u)
+                    else:
+                        agregar(servicio, p, u)
+                    return
+
+                # CASO 2: Múltiples opciones -> POPUP SELECCIÓN
+                top_d = ctk.CTkToplevel(top)
+                top_d.title("Seleccionar Variante")
+                top_d.geometry("400x350")
+                top_d.transient(top); top_d.grab_set()
+                
+                ctk.CTkLabel(top_d, text=f"Servicio: {servicio['nombre']}", font=("bold", 14)).pack(pady=15)
+                ctk.CTkLabel(top_d, text="Seleccione la modalidad:", text_color="gray").pack(pady=(0,10))
+                
+                # Generar botones para cada opción del JSON
+                scroll_ops = ctk.CTkScrollableFrame(top_d, fg_color="transparent")
+                scroll_ops.pack(fill="both", expand=True, padx=20, pady=10)
+                
+                for unidad, precio in opciones.items():
+                    # REGLA CASO/COTIZAR
+                    es_cotizar = "caso" in unidad.lower() or precio == 0
+                    
+                    txt_btn = f"{unidad} (Cotizar)" if es_cotizar else f"{unidad} - ${precio:,.2f}"
+                    col_btn = "gray" if es_cotizar else ACCENT_BLUE
+                    
+                    if es_cotizar:
+                        cmd = lambda u=unidad: [top_d.destroy(), self.after(100, lambda: pedir_manual(servicio, u))]
+                    else:
+                        cmd = lambda u=unidad, p=precio: [agregar(servicio, p, u), top_d.destroy()]
+                    
+                    ctk.CTkButton(scroll_ops, text=txt_btn, command=cmd, fg_color=col_btn, height=40).pack(pady=5, fill="x")
+
+            def pedir_manual(s, u):
+                d = ctk.CTkInputDialog(text=f"Cotización para {s['nombre']} ({u}):", title="Precio Manual")
+                val = d.get_input()
+                if val and val.replace('.','',1).isdigit(): agregar(s, float(val), u)
+
+            def agregar(s, p, u):
+                # Agregamos a la lista
+                self.servicios_agregados.append({
+                    'id': s['id'], 'nombre': s['nombre'], 'unidad': u, 
+                    'precio_unitario': float(p), 'cantidad': 1, 'precio_total': float(p)
+                })
+                self.actualizar_ui_servicios()
+                messagebox.showinfo("Servicio Agregado", f"Se añadió: {s['nombre']}", parent=top)
+
+            def up_sub(c): 
+                combo_sub.configure(values=["Todas"]+self.controller.obtener_subcategorias_por_cat(c) if c!="Todas" else ["Todas"]); combo_sub.set("Todas"); buscar()
+            def reset_filtros():
+                combo_cat.set("Todas"); combo_sub.configure(values=["Todas"]); entry_search.delete(0, 'end'); buscar()
+
+            combo_cat.configure(command=up_sub); combo_sub.configure(command=buscar); entry_search.bind("<Return>", buscar); buscar()
+        except Exception as e: messagebox.showerror("Error", str(e))
+
+    def actualizar_ui_servicios(self):
+        # 1. Limpiar visualmente
+        for w in self.lst_serv.winfo_children(): w.destroy()
+        
+        grand_total = 0
+        es_presupuesto = (self.tipo_var.get() == "Presupuesto")
+        
+        # 2. Si vacío
+        if not self.servicios_agregados:
+            ctk.CTkLabel(self.lst_serv, text="No hay servicios agregados.", text_color="gray").pack(pady=10)
+            if es_presupuesto:
+                self.lbl_tot.configure(text="Total (Presupuesto): $0.00", text_color="gray")
+            else:
+                self.lbl_tot.configure(text="Total: $0.00", text_color=SUCCESS_COLOR)
+            return
+
+        # 3. Dibujar la lista (SIEMPRE VISIBLE)
+        for idx, item in enumerate(self.servicios_agregados):
+            row = ctk.CTkFrame(self.lst_serv, fg_color="white", corner_radius=6)
+            row.pack(fill="x", pady=2, padx=2)
+            
+            # Info
+            info_frame = ctk.CTkFrame(row, fg_color="transparent", width=200)
+            info_frame.pack(side="left", padx=5, pady=5)
+            ctk.CTkLabel(info_frame, text=item['nombre'], font=("Segoe UI", 12, "bold"), width=180, anchor="w").pack(anchor="w")
+            ctk.CTkLabel(info_frame, text=f"({item['unidad']})", font=("Segoe UI", 10), text_color="gray", width=180, anchor="w").pack(anchor="w")
+
+            # Cantidad
+            qty_frame = ctk.CTkFrame(row, fg_color="transparent")
+            qty_frame.pack(side="left", padx=5)
+            ctk.CTkButton(qty_frame, text="-", width=25, height=25, fg_color="#EEE", text_color="black", hover_color="#DDD", command=lambda i=idx: self.cambiar_cantidad(i, -1)).pack(side="left")
+            ctk.CTkLabel(qty_frame, text=str(item['cantidad']), width=30, font=("Segoe UI", 12, "bold")).pack(side="left", padx=2)
+            ctk.CTkButton(qty_frame, text="+", width=25, height=25, fg_color="#EEE", text_color="black", hover_color="#DDD", command=lambda i=idx: self.cambiar_cantidad(i, 1)).pack(side="left")
+
+            # Precios
+            subtotal = item['cantidad'] * item['precio_unitario']
+            item['precio_total'] = subtotal 
+            grand_total += subtotal
+            
+            # Estilo condicional (Gris si es presupuesto, Azul si es tratamiento)
+            txt_precio = f"${subtotal:,.2f}"
+            col_precio = ACCENT_BLUE
+            if es_presupuesto:
+                col_precio = "gray"
+            
+            btn_del = ctk.CTkButton(row, text="×", width=25, height=25, fg_color="transparent", text_color=DANGER_COLOR, hover_color="#FFEEEE", command=lambda i=idx: self.eliminar_servicio(i))
+            btn_del.pack(side="right", padx=5)
+
+            ctk.CTkLabel(row, text=txt_precio, font=("Segoe UI", 12, "bold"), text_color=col_precio).pack(side="right", padx=10)
+
+        # 4. Total Final (Aquí aplicamos la regla de $0.00)
+        if es_presupuesto:
+            self.lbl_tot.configure(text="Total a Pagar: $0.00", text_color="gray")
+        else:
+            self.lbl_tot.configure(text=f"Total a Pagar: ${grand_total:,.2f}", text_color=SUCCESS_COLOR)
+
+    def cambiar_cantidad(self, index, delta):
+        item = self.servicios_agregados[index]
+        nueva = item['cantidad'] + delta
+        if nueva <= 0: self.eliminar_servicio(index)
+        else: item['cantidad'] = nueva; self.actualizar_ui_servicios()
+
+    def eliminar_servicio(self, index):
+        self.servicios_agregados.pop(index); self.actualizar_ui_servicios()
+
+    def actualizar_servicios(self): # Helper legacy
+        self.actualizar_ui_servicios()
