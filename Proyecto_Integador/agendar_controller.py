@@ -5,62 +5,90 @@ import os
 class AgendarCitaController:
     
     def __init__(self):
-        self.lista_doctoras_bd = database.obtener_lista_doctoras()
-        self.mapa_ids = {d['nombre']: d['id'] for d in self.lista_doctoras_bd}
+        # Cargar lista de la BD al iniciar
+        self.lista_doctoras = database.obtener_lista_doctoras()
+        # Mapa para buscar rápido ID por Nombre
+        self.mapa_ids = {d['nombre']: d['id'] for d in self.lista_doctoras}
+        # Mapa inverso para buscar Nombre por ID (usado para sugerir doctora)
+        self.mapa_nombres = {d['id']: d['nombre'] for d in self.lista_doctoras}
         
-    def obtener_info_doctoras(self):
-        res = {}
-        for d in self.lista_doctoras_bd:
-            # 1. Asignación de imágenes
-            foto = "default_doctor.png"
-            if d['id'] == 1: foto = "doctora_1.jpg"
-            elif d['id'] == 2: foto = "doctora_2.jpg"
-            elif d['id'] == 3: foto = "doctora_3.jpg"
+    def obtener_info_doctoras_visual(self):
+        """
+        Prepara los datos para la UI.
+        Prioridad: 
+        1. Foto definida en BD (campo 'foto_perfil').
+        2. Emoji según género (fallback).
+        """
+        resultado = {}
+        
+        for d in self.lista_doctoras:
+            doc_id = d['id']
+            nombre = d['nombre']
+            especialidad = d['especialidad']
+            ruta_bd = d.get('foto_perfil') 
             
-            # 2. Formato de Especialidad
-            # "Cirujana Dentista - (Especialidad)" para las primeras dos
-            especialidad_txt = d['especialidad']
-            if d['id'] in [1, 2]:
-                especialidad_txt = f"Cirujana Dentista - {d['especialidad']}"
+            foto_final = None
+            tipo_visual = "emoji"
+
+            # 1. Verificar si hay ruta en BD y si el archivo existe
+            if ruta_bd and os.path.exists(ruta_bd):
+                foto_final = ruta_bd
+                tipo_visual = "archivo"
+            else:
+                # 2. Fallback a Emoji
+                if "dra" in nombre.lower():
+                    foto_final = "👩‍⚕️"
+                else:
+                    foto_final = "👨‍⚕️"
             
-            res[d['nombre']] = {
-                "id": d['id'],
-                "especialidad": especialidad_txt,
-                "foto": foto 
+            resultado[nombre] = {
+                "id": doc_id,
+                "especialidad": especialidad,
+                "foto": foto_final,
+                "tipo": tipo_visual
             }
-        return res
+            
+        return resultado
 
     def obtener_lista_nombres_doctoras(self):
-        return [d['nombre'] for d in self.lista_doctoras_bd]
+        return [d['nombre'] for d in self.lista_doctoras]
     
-    def obtener_resumen_citas(self):
-        database.sincronizar_estados_bd()
-        hoy = datetime.now().strftime('%Y-%m-%d')
-        return database.obtener_resumen_dia_bd(hoy)
+    # --- SUGERENCIA DE DOCTORA ---
+    def obtener_doctor_sugerido(self, cliente_id):
+        """Busca la última doctora con la que se atendió el paciente."""
+        try:
+            # Buscamos en un rango amplio hacia atrás (ej. 2 años)
+            hoy = datetime.now()
+            inicio = (hoy - timedelta(days=730)).strftime("%Y-%m-%d")
+            fin = hoy.strftime("%Y-%m-%d")
+            
+            # Reutilizamos la función de base de datos que ya existe para rangos
+            # Nota: Asumimos que database tiene esta función (usada en calendario)
+            citas = database.obtener_citas_rango_paciente(inicio, fin, cliente_id)
+            
+            if citas:
+                # Ordenamos por fecha descendente (la más reciente primero)
+                # Asegúrate que 'fecha_cita' sea datetime o string comparable
+                citas.sort(key=lambda x: x['fecha_cita'], reverse=True)
+                ultimo_doc_id = citas[0]['doctora_id']
+                return self.mapa_nombres.get(ultimo_doc_id)
+        except:
+            pass
+        return None
 
-    def buscar_pacientes_existentes(self, query):
-        return database.buscar_clientes_rapido(query)
-    
-    # --- MENÚ DE SERVICIOS ---
-    def buscar_servicios_filtros(self, nombre, cat, sub):
-        return database.buscar_servicios_avanzado(nombre, cat, sub)
-    
-    def obtener_categorias_unicas(self):
-        return database.obtener_columnas_unicas("categoria")
-
-    def obtener_subcategorias_por_cat(self, categoria):
-        return database.obtener_subcategorias_filtro(categoria)
-
-    # --- HORARIOS (Lógica 5 minutos) ---
+    # --- LÓGICA DE TIEMPO (5 minutos) ---
     def obtener_horas_inicio_disponibles(self, fecha_dt, nombre_doctora):
         doc_id = self.mapa_ids.get(nombre_doctora)
         if not doc_id: return []
 
         dia_sem = fecha_dt.weekday() 
-        if dia_sem == 6: return [] 
+        if dia_sem == 6: return [] # Domingo cerrado
 
-        if dia_sem == 5: hora_apertura, hora_cierre = 11, 16
-        else: hora_apertura, hora_cierre = 11, 20
+        # Horarios (Configurable)
+        if dia_sem == 5: # Sábado
+            hora_apertura, hora_cierre = 11, 16 
+        else: # Lunes-Viernes
+            hora_apertura, hora_cierre = 11, 20
 
         fecha_sql = fecha_dt.strftime("%Y-%m-%d")
         ocupadas = database.obtener_citas_dia_doctora(doc_id, fecha_sql)
@@ -71,15 +99,17 @@ class AgendarCitaController:
         
         validas = []
         while actual < limite:
-            # Filtro: Si es hoy, permitir hasta 10 min "atrasados" para dar margen
             if actual.date() == ahora_mismo.date() and actual < (ahora_mismo - timedelta(minutes=10)):
                 actual += timedelta(minutes=5)
                 continue
             
             choca = False
             for (ini, fin) in ocupadas:
-                if isinstance(ini, timedelta): t_i, t_f = (datetime.min + ini).time(), (datetime.min + fin).time()
-                else: t_i, t_f = ini, fin
+                if isinstance(ini, timedelta): 
+                    t_i = (datetime.min + ini).time()
+                    t_f = (datetime.min + fin).time()
+                else: 
+                    t_i, t_f = ini, fin
                 
                 dt_i = datetime.combine(fecha_dt.date(), t_i)
                 dt_f = datetime.combine(fecha_dt.date(), t_f)
@@ -87,29 +117,25 @@ class AgendarCitaController:
                 if actual >= dt_i and actual < dt_f:
                     choca = True; break
             
-            if not choca: validas.append(actual.strftime("%I:%M %p"))
+            if not choca: 
+                validas.append(actual.strftime("%I:%M %p"))
             
-            # --- INTERVALO DE 5 MINUTOS ---
             actual += timedelta(minutes=5)
             
         return validas
 
-    def obtener_duraciones_disponibles(self, fecha_dt, hora_str, nombre_doctora):
-        # Legacy (ya no se usa visualmente, pero se mantiene por compatibilidad)
-        return ["30 min"]
-
-    def guardar_cita_completa(self, datos, servicios):
+    # --- GUARDAR CITA ---
+    def guardar_cita_completa(self, datos, servicios, usuario_responsable_id):
         doc_id = self.mapa_ids.get(datos['doctora'])
-        if not doc_id: return False, "Doctora no válida"
+        if not doc_id: return False, "Doctora no seleccionada."
         
         try:
             h_ini = datetime.strptime(datos['hora_inicio'], "%I:%M %p")
             
-            # Procesar duración (viene del slider o texto)
             import re
             val_dur = str(datos['duracion'])
             nums = re.findall(r'\d+', val_dur)
-            mins = 30
+            mins = 30 
             
             if "h" in val_dur and "min" in val_dur and len(nums) >= 2: 
                 mins = int(nums[0])*60 + int(nums[1])
@@ -120,23 +146,62 @@ class AgendarCitaController:
             
             h_fin = h_ini + timedelta(minutes=mins)
             
+            esta_libre = database.verificar_disponibilidad_sp(
+                doc_id, 
+                datos['fecha'], 
+                h_ini.strftime("%H:%M:%S"), 
+                h_fin.strftime("%H:%M:%S")
+            )
+            
+            if not esta_libre:
+                return False, "⚠️ Error: El horario seleccionado acaba de ser ocupado."
+
             d_cli = {
-                'id': datos['cliente_id_existente'], 'nombre': datos['nombre'],
-                'telefono': datos['telefono'], 'email': datos['email'],
-                'edad': datos['edad'], 'genero': datos['genero'],
-                'notificar': datos['notificar'], 'previo_desc': datos.get('previo_desc')
+                'cliente_id_existente': datos.get('cliente_id_existente'), 
+                'nombre': datos['nombre'],
+                'telefono': datos['telefono'], 
+                'email': datos['email'],
+                'edad': datos['edad'], 
+                'genero': datos['genero'],
+                'notificar': datos['notificar'], 
+                'previo_desc': datos.get('previo_desc')
             }
             
             desc = datos['descripcion']
             if datos['tipo_cita'] == "Tratamiento" and not desc and servicios:
                 desc = servicios[0]['nombre']
-                if len(servicios) > 1: desc += "..."
+                if len(servicios) > 1: desc += f" (+{len(servicios)-1})"
             if not desc: desc = "Consulta General"
 
             d_cita = {
-                'doctora_id': doc_id, 'fecha': datos['fecha'],
-                'hora_inicio': h_ini.strftime("%H:%M:%S"), 'hora_final': h_fin.strftime("%H:%M:%S"),
-                'descripcion': desc, 'estado': 'Pendiente', 'tipo': datos['tipo_cita']
+                'doctora_id': doc_id, 
+                'fecha': datos['fecha'],
+                'hora_inicio': h_ini.strftime("%H:%M:%S"), 
+                'hora_final': h_fin.strftime("%H:%M:%S"),
+                'descripcion': desc, 
+                'estado': 'Pendiente', 
+                'tipo': datos['tipo_cita']
             }
-            return database.guardar_cita_transaccional_bd(d_cli, d_cita, servicios)
-        except Exception as e: return False, f"Error Controller: {e}"
+            
+            return database.guardar_cita_transaccional_bd(d_cli, d_cita, servicios, usuario_responsable_id)
+
+        except Exception as e: 
+            return False, f"Error interno: {e}"
+
+    # --- HELPERS ---
+    def buscar_pacientes_existentes(self, query):
+        return database.buscar_clientes_rapido(query)
+    
+    def obtener_resumen_citas(self): 
+        database.sincronizar_estados_bd()
+        return database.obtener_resumen_dia_bd(datetime.now().strftime('%Y-%m-%d'))
+    
+    def obtener_categorias_unicas(self):
+        return database.obtener_columnas_unicas("categoria")
+
+    def obtener_subcategorias_por_cat(self, c):
+        return database.obtener_subcategorias_filtro(c)
+
+    def buscar_servicios_filtros(self, n, c, s):
+        return database.buscar_servicios_avanzado(n, c, s)
+    

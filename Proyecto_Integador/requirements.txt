@@ -1,5 +1,5 @@
 customtkinter
+mysql-connector-python
 Pillow
 matplotlib
-json
-mysql-connector-python
+packaging

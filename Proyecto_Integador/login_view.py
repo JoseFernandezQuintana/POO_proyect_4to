@@ -2,178 +2,162 @@ import customtkinter as ctk
 from tkinter import messagebox
 from PIL import Image
 import os
-import auth_controller  # Importamos el controlador corregido
-# Asegúrate de tener dashboard_view.py en la misma carpeta
-# from dashboard_view import DashboardApp 
+import auth_controller
 
-# --- CONFIGURACIÓN DE RUTAS ---
+# Configuración
 current_dir = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(current_dir, "logo.png")
-ICON_USER_PATH = os.path.join(current_dir, "icon_user.png")
-ICON_LOCK_PATH = os.path.join(current_dir, "icon_lock.png")
 
-# --- COLORES ---
 BG_COLOR = "#F0F8FF"
-FRAME_COLOR = "white"
+WHITE = "#FFFFFF"
 ACCENT_BLUE = "#1E90FF"
-ACCENT_LIGHT_BLUE = "#D9EFFF" 
+TEXT_BLUE_LOGO = "#007ACC"
+BORDER_COLOR = "#D0E4F5"
+TEXT_COLOR = "#333333"
 
 class LoginApp:
     def __init__(self, root, on_login_success=None):
         self.root = root
-        self.on_login_success = on_login_success # Callback para cambiar ventana
-        self.root.configure(fg_color=BG_COLOR) 
-        self.root.title("Sistema de Gestión de Citas - Ortho Guzmán")
+        self.on_login_success = on_login_success
+        
+        self.root.title("Acceso - Ortho Guzmán")
+        self.root.configure(fg_color=BG_COLOR)
 
-        # Marco principal
-        self.main_frame = ctk.CTkFrame(self.root, fg_color=BG_COLOR)
-        self.main_frame.pack(fill="both", expand=True, padx=40, pady=40) 
+        # --- TARJETA PRINCIPAL ---
+        self.main_frame = ctk.CTkFrame(
+            self.root, 
+            fg_color=WHITE, 
+            corner_radius=20, 
+            border_color=BORDER_COLOR, 
+            border_width=2
+        )
+        self.main_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.85, relheight=0.8)
+
         self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_columnconfigure(1, weight=1)
+        self.main_frame.grid_columnconfigure(1, weight=0) # Línea separadora
+        self.main_frame.grid_columnconfigure(2, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
 
-        # ===== Panel izquierdo (Logo) =====
-        self.left_frame = ctk.CTkFrame(
-            self.main_frame, 
-            corner_radius=25, 
-            fg_color=FRAME_COLOR, 
-            border_width=2, 
-            border_color=ACCENT_LIGHT_BLUE
-        )
-        self.left_frame.grid(row=0, column=0, sticky="nsew", padx=(10, 20), pady=10)
+        # === IZQUIERDA: LOGO + TEXTO AZUL ===
+        self.left_side = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.left_side.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
         
-        logo_container = ctk.CTkFrame(self.left_frame, fg_color="transparent")
-        logo_container.place(relx=0.5, rely=0.5, anchor=ctk.CENTER, relwidth=0.9) 
+        # Contenedor para centrar verticalmente
+        self.logo_box = ctk.CTkFrame(self.left_side, fg_color="transparent")
+        self.logo_box.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Intento de cargar logo
         try:
-            logo = ctk.CTkImage(light_image=Image.open(LOGO_PATH), size=(400, 270)) 
-            ctk.CTkLabel(logo_container, text="", image=logo).pack(pady=(0, 20))
-        except Exception:
-            ctk.CTkLabel(logo_container, text="Ortho Guzmán", font=ctk.CTkFont(size=30, weight="bold"), text_color=ACCENT_BLUE).pack(pady=(0, 20))
-
-        ctk.CTkLabel(
-            logo_container,
-            text="Sistema de Gestión de Citas",
-            font=ctk.CTkFont(family="Arial", size=17, weight="bold"),
-            text_color="#007ACC"
-        ).pack(pady=(10, 0))
-
-        # ===== Panel derecho (Formulario Login) =====
-        self.right_frame = ctk.CTkFrame(
-            self.main_frame, 
-            corner_radius=25, 
-            fg_color=FRAME_COLOR, 
-            border_width=2, 
-            border_color=ACCENT_LIGHT_BLUE
-        )
-        self.right_frame.grid(row=0, column=1, sticky="nsew", padx=(20, 10), pady=10)
-
-        form_container = ctk.CTkFrame(self.right_frame, fg_color="transparent")
-        form_container.place(relx=0.5, rely=0.5, anchor=ctk.CENTER, relwidth=0.85) 
-
-        ctk.CTkLabel(
-            form_container,
-            text=" 🔒  Inicio de Sesión", 
-            font=ctk.CTkFont(family="Arial", size=24, weight="bold"), 
-            text_color="#333333", 
-            anchor="w"
-        ).pack(fill="x", pady=(0, 5))
-
-        ctk.CTkFrame(form_container, height=1, fg_color=ACCENT_LIGHT_BLUE).pack(fill="x", pady=(5, 30))
-
-        # --- Campo Usuario ---
-        ctk.CTkLabel(form_container, text="Usuario", anchor="w", font=ctk.CTkFont(weight="bold"), text_color="#333333").pack(fill="x", pady=(0, 5))
-        
-        usuario_frame = ctk.CTkFrame(form_container, fg_color="white", corner_radius=10, border_width=1, border_color="#DDDDDD") 
-        usuario_frame.pack(pady=5, fill="x")
-        
-        try:
-            icon_user = ctk.CTkImage(light_image=Image.open(ICON_USER_PATH), size=(18, 18))
-            ctk.CTkLabel(usuario_frame, image=icon_user, text="").pack(side="left", padx=(10, 5))
+            pil_img = Image.open(LOGO_PATH)
+            ratio = pil_img.width / pil_img.height
+            new_w = 350
+            new_h = int(new_w / ratio)
+            logo_img = ctk.CTkImage(light_image=pil_img, size=(new_w, new_h))
+            
+            ctk.CTkLabel(self.logo_box, text="", image=logo_img).pack(pady=(0, 15))
         except:
-            ctk.CTkLabel(usuario_frame, text="👤", font=ctk.CTkFont(size=18)).pack(side="left", padx=(10, 5))
+            ctk.CTkLabel(self.logo_box, text="🦷", font=("Arial", 80)).pack(pady=(0,15))
 
-        self.username_entry = ctk.CTkEntry(usuario_frame, placeholder_text="Ej: dra.raquel", height=40, border_width=0, fg_color="white")
-        self.username_entry.pack(side="left", padx=(5, 10), pady=3, fill="x", expand=True) 
+        # Texto del sistema
+        ctk.CTkLabel(
+            self.logo_box, 
+            text="Sistema de Gestión de Citas", 
+            font=("Arial", 18, "bold"), 
+            text_color=TEXT_BLUE_LOGO
+        ).pack()
 
-        # --- Campo Contraseña ---
-        ctk.CTkLabel(form_container, text="Contraseña", anchor="w", font=ctk.CTkFont(weight="bold"), text_color="#333333").pack(fill="x", pady=(15, 5))
+        # === CENTRO: LÍNEA ===
+        self.sep = ctk.CTkFrame(self.main_frame, width=2, fg_color="#F0F0F0")
+        self.sep.grid(row=0, column=1, sticky="ns", pady=40)
+
+        # === DERECHA: FORMULARIO ===
+        self.right_side = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.right_side.grid(row=0, column=2, sticky="nsew", padx=30, pady=30)
         
-        pass_frame = ctk.CTkFrame(form_container, fg_color="white", corner_radius=10, border_width=1, border_color="#DDDDDD") 
-        pass_frame.pack(pady=5, fill="x")
+        self.form_box = ctk.CTkFrame(self.right_side, fg_color="transparent")
+        self.form_box.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.9)
 
-        try:
-            icon_lock = ctk.CTkImage(light_image=Image.open(ICON_LOCK_PATH), size=(18, 18))
-            ctk.CTkLabel(pass_frame, image=icon_lock, text="").pack(side="left", padx=(10, 5))
-        except:
-            ctk.CTkLabel(pass_frame, text="🔑", font=ctk.CTkFont(size=18)).pack(side="left", padx=(10, 5))
+        ctk.CTkLabel(self.form_box, text="Bienvenido", font=("Segoe UI", 28, "bold"), text_color=TEXT_COLOR).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(self.form_box, text="Inicia sesión para continuar", font=("Arial", 12), text_color="gray").pack(anchor="w", pady=(0, 30))
 
-        self.password_entry = ctk.CTkEntry(pass_frame, placeholder_text="••••••••", show="*", height=40, border_width=0, fg_color="white")
-        self.password_entry.pack(side="left", padx=(5, 5), pady=3, fill="x", expand=True)
+        # Usuario
+        ctk.CTkLabel(self.form_box, text="Usuario", font=("Arial", 12, "bold"), text_color="#555").pack(anchor="w", pady=(0,5))
+        self.user_entry = ctk.CTkEntry(
+            self.form_box, 
+            placeholder_text="Nombre de usuario", 
+            height=45, 
+            fg_color="#FAFAFA",
+            border_color="#E0E0E0",
+            text_color="black"
+        )
+        self.user_entry.pack(fill="x", pady=(0, 15))
 
-        # Botón Ojo (Ver contraseña)
-        self.mostrar = False
-        self.eye_icon = ctk.CTkButton(pass_frame, text="👁", width=40, height=35, fg_color="transparent", hover_color="#F0F0F0", command=self.toggle_password, text_color="#AAAAAA")
-        self.eye_icon.pack(side="left", padx=(0, 10))
+        # Contraseña
+        ctk.CTkLabel(self.form_box, text="Contraseña", font=("Arial", 12, "bold"), text_color="#555").pack(anchor="w", pady=(0,5))
+        
+        # --- NUEVO: Contenedor para Input + Botón Ojo ---
+        self.pass_frame = ctk.CTkFrame(self.form_box, fg_color="transparent")
+        self.pass_frame.pack(fill="x", pady=(0, 25))
+
+        self.pass_entry = ctk.CTkEntry(
+            self.pass_frame, 
+            placeholder_text="••••••••", 
+            show="*", 
+            height=45, 
+            fg_color="#FAFAFA",
+            border_color="#E0E0E0",
+            text_color="black"
+        )
+        self.pass_entry.pack(side="left", fill="x", expand=True)
+
+        # Botón Ojo (Texto simple)
+        self.btn_eye = ctk.CTkButton(
+            self.pass_frame,
+            text="👁",
+            width=40,
+            height=45,
+            fg_color="transparent",
+            text_color="#555",
+            hover_color="#E0E0E0",
+            font=("Arial", 16),
+            command=self.toggle_password
+        )
+        self.btn_eye.pack(side="right", padx=(5, 0))
+        # -----------------------------------------------
 
         # Botón Login
-        self.boton_login = ctk.CTkButton(
-            form_container,
-            text="Iniciar Sesión",
-            command=self.login,
-            width=360, height=45, corner_radius=10,
-            fg_color=("#00C6FF", "#005EEA"), 
-            hover_color=("#00B0E5", "#004FB8"),
-            font=ctk.CTkFont(size=16, weight="bold")
+        self.btn_login = ctk.CTkButton(
+            self.form_box, 
+            text="INICIAR SESIÓN", 
+            height=50, 
+            fg_color=ACCENT_BLUE, 
+            hover_color="#0056b3",
+            font=("Segoe UI", 13, "bold"), 
+            command=self.login_action
         )
-        self.boton_login.pack(pady=(45, 10), fill="x")
+        self.btn_login.pack(fill="x", pady=10)
         
-        self.root.bind('<Return>', lambda event: self.login())
+        # Permitir Enter para login
+        self.pass_entry.bind("<Return>", lambda e: self.login_action())
 
     def toggle_password(self):
-        self.mostrar = not self.mostrar
-        if self.mostrar:
-            self.password_entry.configure(show="")
-            self.eye_icon.configure(text="🔓")
+        """Alterna la visibilidad de la contraseña"""
+        if self.pass_entry.cget("show") == "*":
+            self.pass_entry.configure(show="")
+            self.btn_eye.configure(text="✕") # Icono para ocultar
         else:
-            self.password_entry.configure(show="*")
-            self.eye_icon.configure(text="👁")
+            self.pass_entry.configure(show="*")
+            self.btn_eye.configure(text="👁") # Icono para mostrar
 
-    def login(self):
-        usuario = self.username_entry.get().strip()
-        password = self.password_entry.get().strip()
-
-        if not usuario or not password:
-            messagebox.showwarning("Atención", "Por favor ingresa usuario y contraseña.")
+    def login_action(self):
+        u = self.user_entry.get().strip()
+        p = self.pass_entry.get().strip()
+        if not u or not p:
+            messagebox.showwarning("Faltan datos", "Ingresa usuario y contraseña.")
             return
-
-        # Llamada al Controller corregido
-        datos_usuario = auth_controller.login_user(usuario, password)
-
-        if datos_usuario:
-            # datos_usuario es: (id, nombre_completo, nombre_rol)
-            user_id, nombre_completo, rol = datos_usuario
-            
-            # Si main.py pasó una función de transición, la usamos
-            if self.on_login_success:
-                self.on_login_success(nombre_completo, rol)
-            else:
-                # MODO PRUEBA (si ejecutas login_view.py directo)
-                messagebox.showinfo("Éxito", f"Bienvenida, {nombre_completo}\nRol: {rol}")
-                self.root.destroy()
-                # Aquí podrías abrir el dashboard manualmente si es una prueba:
-                # root_dash = ctk.CTk()
-                # from dashboard_view import DashboardApp
-                # DashboardApp(nombre_completo, rol, root_dash)
-                # root_dash.mainloop()
+        
+        datos = auth_controller.login_user(u, p)
+        if datos:
+            if self.on_login_success: self.on_login_success(datos)
         else:
-            messagebox.showerror("Error", "Usuario o contraseña incorrectos.")
-
-# Bloque para probar el Login independientemente
-if __name__ == "__main__":
-    ctk.set_appearance_mode("Light")
-    root = ctk.CTk()
-    root.geometry("900x600")
-    app = LoginApp(root)
-    root.mainloop()
+            messagebox.showerror("Error", "Credenciales incorrectas.")
+            self.pass_entry.delete(0, 'end')

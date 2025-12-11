@@ -6,22 +6,19 @@ class PagosController:
     
     def buscar_pacientes_con_deuda(self, query):
         """
-        Llama a la BD para buscar citas no pagadas.
-        Si query está vacío, trae las últimas deudas generales.
+        Llama a la BD para buscar citas no pagadas con filtro dinámico.
         """
         return database.buscar_citas_con_deuda(query)
 
     def obtener_items_cita(self, cita_id):
         """
-        Obtiene qué se hizo en esa cita (servicios) 
-        para mostrarlos en el recibo o lista de cobro.
+        Obtiene qué se hizo en esa cita (servicios) para el recibo.
         """
         return database.obtener_detalle_deuda(cita_id)
 
-    def procesar_pago(self, cita_id, monto, metodo, nota):
+    def procesar_pago(self, cita_id, monto, metodo, nota, usuario_id):
         """
-        Registra el pago.
-        Realiza validaciones básicas antes de enviar a BD.
+        Registra el pago con validaciones.
         """
         try:
             monto_float = float(monto)
@@ -33,8 +30,7 @@ class PagosController:
         if not metodo:
             return False, "Seleccione un método de pago."
 
-        # Usuario ID: Por ahora usamos 4 (Admin) o podríamos pasarlo desde el Login.
-        # Si tienes el ID del usuario logueado en una variable global, úsalo aquí.
-        usuario_id = 4 
+        if not usuario_id:
+            return False, "Error de sesión: Usuario no identificado."
         
         return database.registrar_pago_bd(cita_id, monto_float, metodo, nota, usuario_id)

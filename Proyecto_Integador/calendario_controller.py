@@ -1,75 +1,58 @@
-from datetime import datetime, timedelta
 import database
-
-# ID DOCTORAS (Verifica que coincidan con tu BD)
-MAPA_DOCTORAS_ID = {
-    "Dra. Raquel Guzmán Reyes (Especialista en Ortodoncia)": 1,
-    "Dra. Paola Jazmin Vera Guzmán (Especialista en Endodoncia)": 2,
-    "Dra. María Fernanda Cabrera Guzmán (Cirujana Dentista)": 3
-}
+from datetime import datetime
 
 class CalendarioController:
     def __init__(self):
-        pass
-
-    def obtener_citas_del_dia(self, fecha_datetime, filtros_doctoras_activas):
-        # 1. Filtros
-        if fecha_datetime.date() == datetime.now().date():
-            database.sincronizar_estados_bd()
-
-        ids_seleccionados = []
-        for nombre_doc_view, variable_tk in filtros_doctoras_activas.items():
-            if variable_tk.get() == "on":
-                uid = MAPA_DOCTORAS_ID.get(nombre_doc_view)
-                if uid: ids_seleccionados.append(uid)
+        self.lista_doctoras = database.obtener_lista_doctoras()
         
-        data_vista = {'Pendientes': [], 'En curso': [], 'Completadas': [], 'Canceladas': []}
-        if not ids_seleccionados: return data_vista
+    def obtener_doctoras_activas(self):
+        return self.lista_doctoras
 
-        # 2. Consulta BD
-        fecha_str = fecha_datetime.strftime('%Y-%m-%d')
-        # obtener_citas_filtro hace SELECT c.*, así que trae 'tipo'
-        resultados = database.obtener_citas_filtro(fecha_str, ids_seleccionados)
+    def buscar_pacientes_lista(self, query):
+        # Wrapper para la función de base de datos
+        return database.buscar_clientes_rapido(query)
 
-        # 3. Procesar
-        for fila in resultados:
-            # Hora
-            hora_obj = fila['hora_inicio'] 
-            if isinstance(hora_obj, timedelta):
-                seg = int(hora_obj.total_seconds())
-                hora_str = f"{seg//3600:02}:{(seg%3600)//60:02}"
-            else:
-                hora_str = str(hora_obj)[:5]
+    def buscar_paciente_id(self, nombre):
+        if not nombre: return None
+        res = database.buscar_clientes_rapido(nombre)
+        return res[0]['id'] if res else None
 
-            # Objeto Visual
-            item = {
-                'id': fila['id'],
-                'hora': f"{hora_str} ({fila.get('duracion_minutos', 30)} min)",
-                'paciente': fila['paciente_nombre_completo'],
-                'tratamiento': fila.get('descripcion') or fila.get('motivo_cita', 'Sin descripción'),
-                'doctora': fila['doctora_nombre_completo'],
-                'telefono': fila.get('telefono', 'Sin registro'),
-                'tipo': fila.get('tipo', 'Consulta') # <--- AQUÍ RECUPERAMOS EL TIPO
-            }
+    def obtener_estilos_dias(self, year, month, id_paciente=None, ids_doctoras=None):
+        bold_days = set()
+        blue_days = set()
+        
+        # Calcular rangos
+        inicio = f"{year}-{month:02d}-01"
+        if month == 12: fin = f"{year+1}-01-01"
+        else: fin = f"{year}-{month+1:02d}-01"
 
-            # Clasificación
-            est = fila['estado']
-            # Mapeo simple a las 4 categorías visuales
-            if est in ['Pendiente', 'Programada']: cat = 'Pendientes'
-            elif est in ['En curso', 'En proceso', 'Atendiendo']: cat = 'En curso'
-            elif est in ['Completada', 'Finalizada']: cat = 'Completadas'
-            elif est in ['Cancelada']: cat = 'Canceladas'
-            else: cat = 'Pendientes'
-            
-            data_vista[cat].append(item)
+        # 1. Días con citas de las doctoras seleccionadas (Negritas/Indicador)
+        if ids_doctoras:
+            # Nota: database.py devuelve 'fecha_cita'
+            citas = database.obtener_citas_rango_doctoras(inicio, fin, ids_doctoras)
+            for c in citas:
+                try: 
+                    # Aseguramos que sea datetime
+                    fecha = c['fecha_cita']
+                    if isinstance(fecha, str):
+                        fecha = datetime.strptime(fecha, "%Y-%m-%d")
+                    bold_days.add(fecha.day)
+                except: pass
 
-        return data_vista
+        # 2. Días del paciente seleccionado (Azules)
+        if id_paciente:
+            citas_p = database.obtener_citas_rango_paciente(inicio, fin, id_paciente)
+            for c in citas_p:
+                try: 
+                    fecha = c['fecha_cita']
+                    if isinstance(fecha, str):
+                        fecha = datetime.strptime(fecha, "%Y-%m-%d")
+                    blue_days.add(fecha.day)
+                except: pass
+                
+        return bold_days, blue_days
 
-    def obtener_dias_ocupados(self, year, month):
-        return database.obtener_dias_con_citas_mes(month, year)
-    
-    def obtener_estado_dias_mes(self, year, month):
-        # Reutilizamos la función existente
-        dias_ocupados = database.obtener_dias_con_citas_mes(month, year)
-        return dias_ocupados
+    def obtener_citas_dia(self, fecha_dt, ids_doctoras):
+        fecha_str = fecha_dt.strftime("%Y-%m-%d")
+        return database.obtener_citas_filtro(fecha_str, ids_doctoras)
     

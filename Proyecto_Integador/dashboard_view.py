@@ -1,302 +1,387 @@
 import customtkinter as ctk
 from tkinter import messagebox
+import sys
 import os
-import sys 
-from typing import Dict, Any
+from PIL import Image, ImageTk 
+import mysql.connector
+from ui_utils import mostrar_loading
 
-# --- IMPORTACIÓN DE VISTAS PRINCIPALES ---
+# Importación de Vistas
 from agendar_view import AgendarCitaFrame
-from mod_agendar_view import ModificarCitaFrame 
 from calendario_view import CalendarFrame
 from pagos_view import PagosFrame
+from mod_agendar_view import ModificarCitaView
 
-# --- IMPORTACIÓN DE VISTAS DE CONFIGURACIÓN/ADMIN ---
-from conf_view import ConfFrame 
+# Admin / Configuración
+from conf_view import ConfFrame
+from profile_view import ProfileFrame
 from admin_usuarios_view import AdminUsuariosFrame
 from admin_servicios_view import AdminServiciosFrame
 from admin_reportes_view import AdminReportesFrame
-from profile_view import ProfileFrame
-
-# --- CONFIGURACIÓN DE COLORES Y RUTAS ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-BG_COLOR = "#F0F8FF"
-WHITE_FRAME = "white"
-BLUE_HEADER = "#1A5276"
-ACCENT_BLUE = "#007BFF"
 
 class DashboardApp:
-    def __init__(self, username, rol, root):
+    def __init__(self, uid, u_nom, u_rol, root):
         self.root = root
-        self.username = username
-        self.rol = rol  
-
-        # --- CORRECCIÓN VITAL: INYECTAR DATOS EN LA VENTANA RAÍZ ---
-        # Esto permite que las vistas (como AdminUsuarios) accedan a self.master.master.rol
-        self.root.rol = rol
-        self.root.username = username
+        self.root.user_id = uid 
+        self.root.rol = u_rol
+        self.username = u_nom
         
-        self.root.title(f"Dashboard | {rol} : {username}")
+        self.root.title("Futuras Sonrisas - Sistema de Agendado")
+        self.main_bg_color = "#F4F6F7" 
+        self.root.configure(fg_color=self.main_bg_color)
         
-        # Intentar maximizar
-        try:
-            self.root.state('zoomed')
-        except:
-            self.root.geometry("1400x900")
-            
-        self.root.configure(fg_color=BG_COLOR)
-
-        # --- CONFIGURACIÓN DE LA GRILLA PRINCIPAL (LAYOUT) ---
-        self.root.grid_rowconfigure(2, weight=1) 
+        self.root.grid_rowconfigure(2, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
-        self.root.grid_columnconfigure(1, weight=0) 
         
-        self.app_closed_completely = False 
-
-        # Mapa de Vistas Principales
-        self.views_map: Dict[str, Any] = {
+        # Vistas Estáticas
+        self.views = {
             "agendar": AgendarCitaFrame,
-            "modificar": ModificarCitaFrame,
-            "calendario": CalendarFrame,
             "pagos": PagosFrame
         }
-
-        # 1. HEADER
+        
+        # Variables de botones
+        self.b_ag = None
+        self.b_ci = None
+        self.b_pa = None
+        
         self.create_header()
-
-        # 2. BARRA DE NAVEGACIÓN
-        self.create_navigation_bar()
-
-        # 3. CONTENIDO PRINCIPAL
-        self.content_container = ctk.CTkFrame(self.root, fg_color=BG_COLOR)
-        self.content_container.grid(row=2, column=0, sticky="nsew", padx=20, pady=0)
-        self.content_container.grid_columnconfigure(0, weight=1)
-        self.content_container.grid_rowconfigure(0, weight=1)
+        self.create_nav()
         
-        # 4. CAPA DE CONFIGURACIÓN
-        self.config_panel = None
-        self.click_listener_id = None
-
-        # 5. CAPA DE CARGA
-        self.loading_overlay = None
-
-        self.current_view = None
-        # Iniciamos
-        self.show_view_with_loading("agendar")
-
-    # --------------------------------------------------------------------------
-    # SISTEMA DE "CARGANDO..."
-    # --------------------------------------------------------------------------
-    def show_loading(self, mensaje="Cargando..."):
-        if self.loading_overlay: return 
-
-        self.loading_overlay = ctk.CTkFrame(self.root, fg_color=("gray90", "gray10"), corner_radius=0)
-        self.loading_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.container = ctk.CTkFrame(self.root, fg_color=self.main_bg_color, corner_radius=0)
+        self.container.grid(row=2, column=0, sticky="nsew", padx=25, pady=(0, 20))
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
         
-        center_frame = ctk.CTkFrame(self.loading_overlay, fg_color=WHITE_FRAME, corner_radius=15, border_width=2, border_color=ACCENT_BLUE)
-        center_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self.curr_view = None
+        self.conf_panel = None
+        self.ignore_next_click = False 
         
-        ctk.CTkLabel(center_frame, text="⏳", font=("Arial", 40)).pack(padx=20, pady=(20, 10))
-        ctk.CTkLabel(center_frame, text=mensaje, font=("Arial", 16, "bold"), text_color=BLUE_HEADER).pack(padx=40, pady=(0, 20))
-        self.root.update_idletasks()
-
-    def hide_loading(self):
-        if self.loading_overlay:
-            self.loading_overlay.destroy()
-            self.loading_overlay = None
-
-    def show_view_with_loading(self, view_name):
-        self.show_loading(f"Cargando módulo {view_name}...")
-        self.root.after(50, lambda: self._execute_show_view(view_name))
-
-    def _execute_show_view(self, view_name):
-        try:
-            self.show_view(view_name)
-        except Exception as e:
-            messagebox.showerror("Error Crítico", f"No se pudo cargar la vista: {e}")
-        finally:
-            self.hide_loading()
-
-    # --------------------------------------------------------------------------
-    # COMPONENTES VISUALES
-    # --------------------------------------------------------------------------
-    def create_header(self):
-        self.header_frame = ctk.CTkFrame(self.root, height=60, fg_color=BLUE_HEADER, corner_radius=0)
-        self.header_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
-        self.header_frame.grid_columnconfigure(0, weight=1) 
-        self.header_frame.grid_columnconfigure(1, weight=0)
-
-        ctk.CTkLabel(
-            self.header_frame, 
-            text=" Sistema de Gestión de Citas", 
-            font=ctk.CTkFont(size=18, weight="bold"), 
-            text_color="white"
-        ).grid(row=0, column=0, sticky="w", padx=20, pady=10)
+        self.root.bind_all("<Button-1>", self.chk_click, add="+")
         
-        right_header_frame = ctk.CTkFrame(self.header_frame, fg_color="transparent")
-        right_header_frame.grid(row=0, column=1, sticky="e", padx=20)
-        
-        ctk.CTkLabel(
-            right_header_frame,
-            text=f"👤 {self.username} ({self.rol})",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color="white"
-        ).pack(side="left", padx=20)
-        
-        self.btn_config = ctk.CTkButton(
-            right_header_frame,
-            text="⚙️ Configuración",
-            command=self.toggle_config_panel,
-            width=140, 
-            fg_color="#D9EFFF",
-            text_color=BLUE_HEADER,
-            hover_color="white",
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
-        self.btn_config.pack(side="left", padx=10)
+        self.nav_to("agendar")
 
-    def create_navigation_bar(self):
-        self.nav_frame = ctk.CTkFrame(self.root, fg_color=BG_COLOR)
-        self.nav_frame.grid(row=1, column=0, sticky="ew", padx=20, pady=(15, 5))
-        
-        self.nav_buttons_frame = ctk.CTkFrame(
-            self.nav_frame, 
-            fg_color=WHITE_FRAME, 
-            corner_radius=25, 
-            height=60, 
-            border_color="#D0D0D0", 
-            border_width=1
-        )
-        self.nav_buttons_frame.pack(anchor="n", padx=20, pady=5)
-
-        self.nav_buttons_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="group1")
-        self.nav_buttons_frame.grid_rowconfigure(0, weight=1)
-
-        btn_config = {
-            "height": 40, "corner_radius": 15, "font": ctk.CTkFont(size=14, weight="bold"),
-            "fg_color": "transparent", "text_color": "#555555", "hover_color": "#E8F0FE"
-        }
-
-        self.btn_agendar = ctk.CTkButton(self.nav_buttons_frame, text="📅 Agendar Cita", command=lambda: self.show_view_with_loading("agendar"), **btn_config)
-        self.btn_agendar.grid(row=0, column=0, padx=5, pady=8, sticky="ew")
-        
-        self.btn_modificar = ctk.CTkButton(self.nav_buttons_frame, text="✏️ Modificar", command=lambda: self.show_view_with_loading("modificar"), **btn_config)
-        self.btn_modificar.grid(row=0, column=1, padx=5, pady=8, sticky="ew")
-        
-        self.btn_calendario = ctk.CTkButton(self.nav_buttons_frame, text="🗓️ Calendario", command=lambda: self.show_view_with_loading("calendario"), **btn_config)
-        self.btn_calendario.grid(row=0, column=2, padx=5, pady=8, sticky="ew")
-
-        self.btn_pagos = ctk.CTkButton(self.nav_buttons_frame, text="💰 Caja / Pagos", command=lambda: self.show_view_with_loading("pagos"), **btn_config)
-        self.btn_pagos.grid(row=0, column=3, padx=5, pady=8, sticky="ew")
-
-    def show_view(self, view_name):
-        self.close_config_panel() 
-
-        if self.current_view:
-            self.current_view.destroy()
-            
-        for btn in [self.btn_agendar, self.btn_modificar, self.btn_calendario, self.btn_pagos]:
-            btn.configure(fg_color="transparent", text_color="#555555", border_width=0)
-
-        active_button = None
-        if view_name == "agendar": active_button = self.btn_agendar
-        elif view_name == "modificar": active_button = self.btn_modificar
-        elif view_name == "calendario": active_button = self.btn_calendario
-        elif view_name == "pagos": active_button = self.btn_pagos
-            
-        if active_button:
-            active_button.configure(fg_color=ACCENT_BLUE, text_color="white")
-            
-        ViewClass = self.views_map.get(view_name)
-        if ViewClass:
-            self.current_view = ViewClass(self.content_container)
-            self.current_view.pack(fill="both", expand=True)
-
-    # --------------------------------------------------------------------------
-    # LÓGICA DE CONFIGURACIÓN
-    # --------------------------------------------------------------------------
-    def toggle_config_panel(self):
-        if self.config_panel:
-            self.close_config_panel()
+    def nav_to(self, name):
+        if not self.b_ag or not self.b_ci or not self.b_pa:
+            self.root.after(100, lambda: self.nav_to(name)) 
             return
 
-        # Creamos el panel pasando el rol explícitamente
-        self.config_panel = ConfFrame(
-            self.root, 
-            handle_action_callback=self.handle_config_action,
-            rol=self.rol, # <--- SE PASA EL ROL AQUÍ
-            width=300
-        )
+        for b in [self.b_ag, self.b_ci, self.b_pa]: 
+            b.configure(fg_color="transparent", text_color="black")
         
-        self.config_panel.grid(row=1, column=1, rowspan=2, sticky="nsew", padx=0, pady=0)
-        self.click_listener_id = self.root.bind_all("<Button-1>", self.check_click_outside, add="+")
+        color_activo = "#D6EAF8" 
+        
+        if name == "agendar": self.b_ag.configure(fg_color=color_activo, text_color="#154360")
+        elif name == "citas": self.b_ci.configure(fg_color=color_activo, text_color="#154360")
+        elif name == "pagos": self.b_pa.configure(fg_color=color_activo, text_color="#154360")
+        
+        self._limpiar_contenedor()
+        
+        # --- CAMBIO: USAMOS TIPO='CIRCULO' ---
+        mostrar_loading(self.container, 500, lambda: self._load_view(name), tipo="circulo", mensaje="Cargando vista...")
 
-    def check_click_outside(self, event):
-        if self.config_panel:
-            widget = event.widget
+    def obtener_ruta_foto(self):
+        try:
+            conn = mysql.connector.connect(
+                host="localhost", user="root", password="", database="futuras_sonrisas", port=3306
+            )
+            cursor = conn.cursor()
+            cursor.execute("SELECT foto_perfil FROM usuarios WHERE id = %s", (self.root.user_id,))
+            res = cursor.fetchone()
+            conn.close()
+            if res and res[0]:
+                return res[0]
+            return None
+        except:
+            return None
+
+    def create_header(self):
+        h = ctk.CTkFrame(self.root, height=60, fg_color="#154360", corner_radius=0)
+        h.grid(row=0, column=0, sticky="ew")
+        
+        # LOGO CLICKEABLE
+        logo_frame = ctk.CTkFrame(h, fg_color="transparent", cursor="hand2") 
+        logo_frame.pack(side="left", padx=10, pady=5)
+        
+        lbl_tit = ctk.CTkLabel(logo_frame, text="FUTURAS SONRISAS", font=("Segoe UI", 18, "bold"), text_color="white")
+        lbl_tit.pack(anchor="w")
+        lbl_sub = ctk.CTkLabel(logo_frame, text="Sistema de Gestión de Agendado", font=("Segoe UI", 11), text_color="#A9CCE3")
+        lbl_sub.pack(anchor="w")
+        
+        logo_frame.bind("<Button-1>", lambda e: self.nav_to("agendar"))
+        lbl_tit.bind("<Button-1>", lambda e: self.nav_to("agendar"))
+        lbl_sub.bind("<Button-1>", lambda e: self.nav_to("agendar"))
+
+        # USUARIO
+        r = ctk.CTkFrame(h, fg_color="transparent")
+        r.pack(side="right", padx=20)
+        
+        foto_path = self.obtener_ruta_foto()
+        imagen_perfil = None
+        texto_emoji = ""
+
+        if foto_path and os.path.exists(foto_path):
             try:
-                if widget == self.btn_config: return
-                if str(self.config_panel) in str(widget): return
-                self.close_config_panel()
+                img_pil = Image.open(foto_path)
+                width, height = img_pil.size
+                new_side = min(width, height)
+                left = (width - new_side) / 2
+                top = (height - new_side) / 2
+                right = (width + new_side) / 2
+                bottom = (height + new_side) / 2
+                img_cropped = img_pil.crop((left, top, right, bottom))
+                img_resized = img_cropped.resize((35, 35), Image.Resampling.LANCZOS)
+                imagen_perfil = ctk.CTkImage(img_resized, size=(35, 35))
+            except: pass 
+        
+        if not imagen_perfil:
+            rol_lower = self.root.rol.lower()
+            if "doctor" in rol_lower: texto_emoji = "👩‍⚕️"
+            elif "recepcionista" in rol_lower: texto_emoji = "💁‍♀️"
+            else: texto_emoji = "🧑‍💻"
+
+        btn_perfil = ctk.CTkButton(
+            r, 
+            text=f"  {texto_emoji}   {self.username} | {self.root.rol}  ", 
+            image=imagen_perfil,
+            compound="left", 
+            font=("Segoe UI", 12, "bold"),
+            text_color="white",
+            fg_color="transparent",
+            hover_color="#1F618D",
+            command=self.abrir_mi_perfil_directo, 
+            corner_radius=20
+        )
+        btn_perfil.pack(side="left", padx=(0, 10))
+
+        self.btn_conf = ctk.CTkButton(
+            r, text="⚙️", width=35, height=30,
+            command=self.toggle_conf, 
+            fg_color="#1A5276", hover_color="#21618C", 
+            text_color="white", corner_radius=6
+        )
+        self.btn_conf.pack(side="left")
+
+    def create_nav(self):
+        n = ctk.CTkFrame(self.root, fg_color="white", corner_radius=0, height=70)
+        n.grid(row=1, column=0, sticky="ew", padx=0, pady=0)
+        
+        center_box = ctk.CTkFrame(n, fg_color="transparent")
+        center_box.pack(anchor="center", pady=15)
+
+        cf = {
+            "font": ("Segoe UI", 13, "bold"), 
+            "fg_color": "transparent", 
+            "hover_color": "#E5E8E8",  
+            "text_color": "black",     
+            "height": 40, 
+            "width": 120,
+            "corner_radius": 20,       
+            "border_width": 0          
+        }
+        
+        self.b_ag = ctk.CTkButton(center_box, text="📅 Agendar", command=lambda: self.nav_to("agendar"), **cf)
+        self.b_ag.pack(side="left", padx=5)
+
+        sep1 = ctk.CTkFrame(center_box, width=2, height=25, fg_color="#D5DBDB")
+        sep1.pack(side="left", padx=5)
+
+        self.b_ci = ctk.CTkButton(center_box, text="📂 Citas", command=lambda: self.nav_to("citas"), **cf)
+        self.b_ci.pack(side="left", padx=5)
+
+        sep2 = ctk.CTkFrame(center_box, width=2, height=25, fg_color="#D5DBDB")
+        sep2.pack(side="left", padx=5)
+
+        self.b_pa = ctk.CTkButton(center_box, text="💰 Pagos", command=lambda: self.nav_to("pagos"), **cf)
+        self.b_pa.pack(side="left", padx=5)
+
+    def nav_to(self, name):
+        if not self.b_ag or not self.b_ci or not self.b_pa:
+            self.root.after(100, lambda: self.nav_to(name)) 
+            return
+
+        for b in [self.b_ag, self.b_ci, self.b_pa]: 
+            b.configure(fg_color="transparent", text_color="black")
+        
+        color_activo = "#D6EAF8" 
+        
+        if name == "agendar": 
+            self.b_ag.configure(fg_color=color_activo, text_color="#154360")
+        elif name == "citas": 
+            self.b_ci.configure(fg_color=color_activo, text_color="#154360")
+        elif name == "pagos": 
+            self.b_pa.configure(fg_color=color_activo, text_color="#154360")
+        
+        self.root.after(50, lambda: self._load_view(name))
+
+    # --- FUNCIÓN NUEVA: LIMPIEZA NUCLEAR ---
+    def _limpiar_contenedor(self):
+        # 1. Destruir referencia lógica
+        if self.curr_view: 
+            try:
+                self.curr_view.destroy()
+            except: pass
+            self.curr_view = None
+        
+        # 2. BARRIDO FÍSICO: Destruir cualquier hijo que quede en el contenedor
+        # Esto elimina barras de scroll fantasmas o frames pegados
+        for widget in self.container.winfo_children():
+            try:
+                widget.destroy()
+            except: pass
+            
+        # 3. Forzar actualización de la interfaz para redibujar el vacío
+        self.container.update_idletasks()
+
+    def _load_view(self, name):
+        # Usamos la limpieza nuclear
+        self._limpiar_contenedor()
+        
+        if name == "citas":
+            self.curr_view = CalendarFrame(self.container, callback_modificar=self.ir_a_modificar_cita)
+            self.curr_view.pack(fill="both", expand=True)
+        else:
+            cls = self.views.get(name)
+            if cls: 
+                self.curr_view = cls(self.container)
+                self.curr_view.pack(fill="both", expand=True)
+
+    def _load_admin(self, cls_or_lambda):
+        self._limpiar_contenedor()
+        
+        if self.b_ag and self.b_ci and self.b_pa:
+            for b in [self.b_ag, self.b_ci, self.b_pa]: 
+                b.configure(fg_color="transparent", text_color="black")
+        
+        def _accion_real():
+            if isinstance(cls_or_lambda, type):
+                self.curr_view = cls_or_lambda(self.container)
+            else:
+                self.curr_view = cls_or_lambda(self.container)
+            self.curr_view.pack(fill="both", expand=True)
+
+        # --- CAMBIO: USAMOS TIPO='CIRCULO' ---
+        mostrar_loading(self.container, 500, _accion_real, tipo="circulo", mensaje="Cargando...")
+
+    def ir_a_modificar_cita(self, cita_id):
+        # También aquí por si acaso
+        self._limpiar_contenedor()
+        
+        self.curr_view = ModificarCitaView(
+            self.container, 
+            cita_id, 
+            callback_volver=self.volver_a_citas,
+            current_user_id=self.root.user_id
+        )
+        self.curr_view.pack(fill="both", expand=True)
+
+    def volver_a_citas(self):
+        self.nav_to("citas")
+
+    def toggle_conf(self):
+        if self.conf_panel: 
+            self.conf_panel.destroy()
+            self.conf_panel = None
+        else:
+            self.conf_panel = ConfFrame(self.root, self.on_conf_action, self.root.rol)
+            self.conf_panel.place(relx=1.0, y=67, anchor="ne", relheight=0.9) 
+            self.conf_panel.lift()
+            self.ignore_next_click = True 
+
+    def chk_click(self, e):
+        if self.ignore_next_click:
+            self.ignore_next_click = False
+            return
+        if self.conf_panel:
+            try:
+                widget = e.widget
+                if str(self.conf_panel) not in str(widget) and widget != self.btn_conf:
+                    self.conf_panel.destroy()
+                    self.conf_panel = None
             except: pass
 
-    def close_config_panel(self):
-        if self.config_panel:
-            self.config_panel.destroy()
-            self.config_panel = None
-        
-        if self.click_listener_id:
-            try: self.root.unbind_all("<Button-1>")
-            except: pass
-            self.click_listener_id = None
+    def abrir_mi_perfil_directo(self):
+        if isinstance(self.curr_view, ProfileFrame):
+            return 
+        self._load_admin(lambda parent: ProfileFrame(parent, self.root.user_id, self.root.rol))
 
-    def handle_config_action(self, choice):
-        self.close_config_panel()
+    def on_conf_action(self, act):
+        if self.conf_panel: self.conf_panel.destroy(); self.conf_panel=None
         
-        # Resetear navegación visual
-        for btn in [self.btn_agendar, self.btn_modificar, self.btn_calendario, self.btn_pagos]:
-            btn.configure(fg_color="transparent", text_color="#555555")
+        # --- LÓGICA DE PERMISOS JERÁRQUICOS ---
+        rol_efectivo = self.root.rol # Por defecto es tu propio rol
+
+        # Si soy Recepcionista y quiero entrar a zonas restringidas, pido permiso
+        if self.root.rol == "Recepcionista" and act in ["Administración de Cuentas", "Cotización de Servicios"]:
+            rol_autorizado = self._solicitar_permiso_supervisor()
+            if not rol_autorizado:
+                return # Si cancela o falla, no entramos
+            rol_efectivo = rol_autorizado # HEREDA EL PODER (Admin o Doctora)
+
+        # --- NAVEGACIÓN CON ROL EFECTIVO ---
+        if act == "Mi Perfil": 
+            self.abrir_mi_perfil_directo()
         
-        if self.current_view: self.current_view.destroy()
-
-        # Enrutamiento
-        if choice == "Mi Perfil":
-            self.current_view = ProfileFrame(self.content_container)
-            self.current_view.pack(fill="both", expand=True)
-
-        elif choice == "Administración de Cuentas":
-            if self.rol not in ["Administrador", "Doctora"]:
-                messagebox.showerror("Acceso Denegado", "No tienes permisos suficientes.")
-                self.show_view_with_loading("agendar")
-            else:
-                self.current_view = AdminUsuariosFrame(self.content_container)
-                self.current_view.pack(fill="both", expand=True)
-                
-        elif choice == "Cotización de Servicios":
-            self.current_view = AdminServiciosFrame(self.content_container)
-            self.current_view.pack(fill="both", expand=True)
+        elif act == "Administración de Cuentas": 
+            # Pasamos el rol_efectivo a la vista
+            self._load_admin(lambda p: AdminUsuariosFrame(p, rol_contexto=rol_efectivo))
+        
+        elif act == "Cotización de Servicios": 
+            # Pasamos el rol_efectivo a la vista
+            self._load_admin(lambda p: AdminServiciosFrame(p, rol_contexto=rol_efectivo))
             
-        elif choice in ["Gráficas y Estadísticas", "Reportes Financieros"]:
-            if self.rol != "Administrador":
-                 messagebox.showerror("Acceso Denegado", "Solo Administradores.")
-            else:
-                self.current_view = AdminReportesFrame(self.content_container)
-                self.current_view.pack(fill="both", expand=True)
-
-        elif choice == "🚪 Cerrar Sesión":
-            self.logout()
+        elif act == "Reportes y Estadisticas": 
+            self._load_admin(AdminReportesFrame)
             
-        elif choice == "🛑 Cerrar App":
-            self.close_app()
+        elif "Cerrar Sesión" in act:
+            if messagebox.askyesno("Cerrar Sesión", "¿Deseas cerrar tu sesión actual?"):
+                self.logout()
+        elif "Cerrar App" in act:
+             if messagebox.askyesno("Salir", "¿Estás seguro de que quieres salir?"):
+                self.root.destroy(); sys.exit()
+
+    def _solicitar_permiso_supervisor(self):
+        """Muestra popup y retorna el ROL del supervisor que autorizó (o None)"""
+        dialog = ctk.CTkInputDialog(text="Requiere autorización (Admin/Doctora)\nIngrese Usuario:", title="Acceso Restringido")
+        # Truco para centrar el popup (opcional)
+        try: dialog.geometry(f"+{self.root.winfo_x()+100}+{self.root.winfo_y()+100}")
+        except: pass
+        
+        user = dialog.get_input()
+        if not user: return None
+        
+        dialog_pass = ctk.CTkInputDialog(text=f"Usuario: {user}\nIngrese Contraseña:", title="Credenciales")
+        try: dialog_pass.geometry(f"+{self.root.winfo_x()+100}+{self.root.winfo_y()+100}")
+        except: pass
+        
+        pwd = dialog_pass.get_input()
+        if not pwd: return None
+
+        # Validamos usando la BD directamente o controller
+        # Nota: Usamos database.validar_login para obtener el rol real del supervisor
+        import database
+        datos = database.validar_login(user, pwd)
+        
+        if datos:
+            rol_sup = datos['rol']
+            if rol_sup in ["Administrador", "Doctora"]:
+                messagebox.showinfo("Autorizado", f"Acceso concedido por: {datos['nombre_completo']} ({rol_sup})")
+                return rol_sup # RETORNAMOS EL ROL DEL JEFE
+            else:
+                messagebox.showerror("Error", "Este usuario no tiene permisos para autorizar.")
+        else:
+            messagebox.showerror("Error", "Credenciales incorrectas.")
+        
+        return None
 
     def logout(self):
-        confirm = messagebox.askyesno("Cerrar Sesión", "¿Seguro que quieres salir?")
-        if confirm:
-            self.show_loading("Cerrando sesión...")
-            self.root.after(1000, lambda: self.root.destroy())
-            
-    def close_app(self):
-        confirm = messagebox.askyesno("Cerrar Aplicación", "¿Salir completamente del sistema?")
-        if confirm:
-            self.app_closed_completely = True
-            self.root.destroy()
-            sys.exit()
+        for widget in self.root.winfo_children(): widget.destroy()
+        try:
+            from login_view import LoginApp
+        except ImportError: return
+        def relogin_cb(datos):
+            uid, nom, rol, _ = datos
+            for w in self.root.winfo_children(): w.destroy()
+            try: self.root.state('zoomed')
+            except: self.root.geometry("1300x800")
+            DashboardApp(uid, nom, rol, self.root)
+        LoginApp(self.root, on_login_success=relogin_cb)
