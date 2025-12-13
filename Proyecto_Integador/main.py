@@ -11,6 +11,7 @@ def main():
     root = ctk.CTk()
     root.title("Futuras Sonrisas - Gestión")
     
+    # Centrar ventana
     w, h = 900, 600
     ws = root.winfo_screenwidth()
     hs = root.winfo_screenheight()
@@ -18,9 +19,8 @@ def main():
     y = (hs/2) - (h/2)
     root.geometry(f'{w}x{h}+{int(x)}+{int(y)}')
 
-    # Poner pantalla de carga inicial
-    # Se mostrará inmediatamente al abrir
-    loader = LoadingOverlay(root, mensaje="INICIANDO SISTEMA...")
+    # 1. Poner pantalla de carga inicial (ESTILO BARRA)
+    loader = LoadingOverlay(root, mensaje="INICIANDO SISTEMA...", tipo="barra")
     root.update() 
 
     def iniciar_login():

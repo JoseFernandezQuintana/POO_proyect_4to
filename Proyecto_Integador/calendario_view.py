@@ -302,24 +302,43 @@ class CalendarFrame(ctk.CTkFrame):
         cita_id = data['id']
         
         card = ctk.CTkFrame(self.appointments_scroll, fg_color=WHITE_FRAME, 
-                            corner_radius=12, 
-                            border_color=col, # Borde del color del estado
-                            border_width=2,   
-                            cursor="hand2")
+                            corner_radius=12, border_color=col, border_width=2, cursor="hand2")
         card.pack(fill="x", pady=6, padx=5)
         
         cmd = lambda e: self.abrir_modificar_cita(cita_id)
         card.bind("<Button-1>", cmd)
 
-        # 1. Hora 
-        h_str = str(data['hora_inicio'])[:5]
+        # 1. HORA (AM/PM)
+        try:
+            # Convertimos string "14:00:00" o timedelta a objeto hora
+            raw_h = data['hora_inicio']
+            if isinstance(raw_h, timedelta): 
+                t_obj = (datetime.min + raw_h).time()
+            else:
+                t_obj = datetime.strptime(str(raw_h), "%H:%M:%S").time()
+            
+            # Formato AM/PM sin el cero a la izquierda (3:00 PM en vez de 03:00 PM)
+            h_str = t_obj.strftime("%I:%M %p").lstrip("0") 
+        except: 
+            h_str = str(data['hora_inicio'])[:5]
+
         f_h = ctk.CTkFrame(card, fg_color="transparent")
         f_h.pack(side="left", padx=15, pady=10)
         
         lbl_h = ctk.CTkLabel(f_h, text=h_str, font=ctk.CTkFont(size=20, weight="bold"), text_color=TEXT_DARK)
         lbl_h.pack(anchor="w")
+
+        # DURACIÓN FORMATEADA (1 hr 30 min)
         dur = data.get('duracion_minutos', 30)
-        ctk.CTkLabel(f_h, text=f"{dur} min", font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w")
+        if dur < 60:
+            dur_txt = f"{dur} min"
+        else:
+            horas = dur // 60
+            mins = dur % 60
+            if mins == 0: dur_txt = f"{horas} hr"
+            else: dur_txt = f"{horas} hr {mins} min"
+
+        ctk.CTkLabel(f_h, text=dur_txt, font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w")
         
         for w in f_h.winfo_children(): w.bind("<Button-1>", cmd); f_h.bind("<Button-1>", cmd)
 
@@ -342,17 +361,12 @@ class CalendarFrame(ctk.CTkFrame):
         
         for w in f_i.winfo_children(): w.bind("<Button-1>", cmd); f_i.bind("<Button-1>", cmd)
 
-        # 3. Badge Estado y Botón
+        # 3. Badge Estado
         f_act = ctk.CTkFrame(card, fg_color="transparent")
         f_act.pack(side="right", padx=15)
         
-        # Badge relleno
-        badge = ctk.CTkLabel(f_act, text=est.upper(), 
-                             font=ctk.CTkFont(size=10, weight="bold"), 
-                             text_color="white",
-                             fg_color=col, 
-                             corner_radius=10, 
-                             width=90)
+        badge = ctk.CTkLabel(f_act, text=est.upper(), font=ctk.CTkFont(size=10, weight="bold"), 
+                             text_color="white", fg_color=col, corner_radius=10, width=90)
         badge.pack(pady=(0,5))
         badge.bind("<Button-1>", cmd)
         

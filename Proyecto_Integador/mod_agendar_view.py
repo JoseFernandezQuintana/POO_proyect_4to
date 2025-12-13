@@ -388,28 +388,33 @@ class ModificarCitaView(ctk.CTkFrame):
         if self.selected_date: self.act_horarios()
 
     def act_horarios(self):
-        d = self.opt_doc.get() # Ojo: En modificar se llama opt_doc, no cmb_doc
+        d = self.opt_doc.get()
         if not d or not self.selected_date: return
         
         dt_full = datetime.combine(self.selected_date, datetime.min.time())
-        
-        # 1. Obtener slots del controlador
         s = self.ctrl.obtener_horas_disponibles_edicion(dt_full, d, self.cita_id)
         
-        # 2. Respaldo: Asegurar que la hora actual de la cita aparezca si es el mismo día
+        # --- LÓGICA PARA RECUPERAR HORA Y MINUTO ORIGINAL ---
         es_mismo_dia_db = (self.selected_date == self.datos_cita['fecha_cita'])
-        target_h_db = None # Para recordar cuál seleccionar luego
+        target_h_db = None 
+        target_m_db = None # Variable nueva para el minuto
 
         if es_mismo_dia_db:
             raw = self.datos_cita['hora_inicio']
+            # Convertir timedelta a time si es necesario
             if isinstance(raw, timedelta): raw = (datetime.min + raw).time()
-            hora_visual_actual = raw.strftime("%I:%M %p") # "11:00 AM"
             
-            # Guardamos la referencia de la Hora (Clave) para seleccionarla luego
-            parts_t = hora_visual_actual.split(":")
+            # Formatear a estilo AM/PM para buscar en el mapa
+            hora_visual_actual = raw.strftime("%I:%M %p") # "11:15 AM"
+            parts_t = hora_visual_actual.split(":") 
+            
             if len(parts_t) > 1:
-                target_h_db = f"{parts_t[0]} {parts_t[1].split()[1]}" # "11 AM"
+                # Clave Hora: "11 AM"
+                target_h_db = f"{parts_t[0]} {parts_t[1].split()[1]}" 
+                # Valor Minuto: "15"
+                target_m_db = parts_t[1].split()[0]
 
+            # Inyectar la hora actual en la lista de disponibles si no está
             if hora_visual_actual not in s:
                 s.append(hora_visual_actual)
                 s.sort(key=lambda x: datetime.strptime(x, "%I:%M %p"))
@@ -421,41 +426,42 @@ class ModificarCitaView(ctk.CTkFrame):
             self.lbl_fin.configure(text="Fin: --:--")
             return
             
-        # 3. Construcción ROBUSTA del mapa H -> [M, M...]
         for x in s:
             try:
-                # x viene como "11:00 AM"
                 parts = x.split(":") 
-                h_part = parts[0]       # "11"
-                rest = parts[1].split() 
-                m_part = rest[0]        # "00"
-                ampm = rest[1]          # "AM"
-                
-                h_k = f"{h_part} {ampm}" # Clave: "11 AM"
-                m_v = m_part             # Valor: "00"
-                
+                h_part = parts[0]; rest = parts[1].split() 
+                m_part = rest[0]; ampm = rest[1]
+                h_k = f"{h_part} {ampm}"
+                m_v = m_part
                 if h_k not in self.mapa_horarios: self.mapa_horarios[h_k]=[]
-                if m_v not in self.mapa_horarios[h_k]: 
-                    self.mapa_horarios[h_k].append(m_v)
+                if m_v not in self.mapa_horarios[h_k]: self.mapa_horarios[h_k].append(m_v)
             except: continue
             
         ks = list(self.mapa_horarios.keys())
         self.cmb_h.configure(values=ks)
         
-        # 4. Lógica de Selección Inteligente
-        seleccion_actual_ui = self.cmb_h.get()
-
-        # Prioridad A: Es la hora original de la cita (si estamos editando el mismo día)
+        seleccion_h = ks[0] if ks else ""
+        
         if target_h_db and target_h_db in ks:
-            self.cmb_h.set(target_h_db)
-        # Prioridad B: Mantener la selección del usuario si es válida
-        elif seleccion_actual_ui in ks:
-            self.cmb_h.set(seleccion_actual_ui)
-        # Prioridad C: Default al primero
-        elif ks:
-            self.cmb_h.set(ks[0])
+            seleccion_h = target_h_db
+        elif self.cmb_h.get() in ks:
+            seleccion_h = self.cmb_h.get()
             
-        # FORZAR actualización de minutos
+        self.cmb_h.set(seleccion_h)
+        
+        # --- ACTUALIZAR MINUTOS Y FORZAR EL CORRECTO ---
+        # 1. Cargamos los minutos disponibles para esa hora
+        vals_m = self.mapa_horarios.get(seleccion_h, ["00"])
+        self.cmb_m.configure(values=vals_m)
+        
+        # 2. Intentamos poner el minuto original de la BD
+        if target_m_db and target_m_db in vals_m:
+            self.cmb_m.set(target_m_db)
+        # 3. Si no, mantenemos el que estaba o ponemos el primero
+        elif self.cmb_m.get() not in vals_m:
+            self.cmb_m.set(vals_m[0])
+            
+        # Calcular hora fin visualmente
         self.calc_fin(None)
 
     def calc_fin(self, _):
@@ -718,25 +724,23 @@ class ModificarCitaView(ctk.CTkFrame):
         self.actualizar_lista_servicios_visual()
     
     def guardar_todo(self):
+        # 1. Validaciones previas
         if not self.ent_nombre.get().strip():
             messagebox.showwarning("Faltan datos", "El nombre del paciente es obligatorio.")
-            self.mostrar_panel("paciente")
-            return
+            self.mostrar_panel("paciente"); return
         if "Lleno" in self.cmb_h.get():
             messagebox.showwarning("Horario Ocupado", "El horario seleccionado no está disponible.")
-            self.mostrar_panel("fecha")
-            return
+            self.mostrar_panel("fecha"); return
 
+        # 2. Preparar datos
         h_str = str(self.datos_cita['hora_inicio'])
         if hasattr(self, 'cmb_h'):
             h_str = f"{self.cmb_h.get().split()[0]}:{self.cmb_m.get()} {self.cmb_h.get().split()[1]}"
         
         prev_opt = self.cmb_prev_opt.get()
         prev_desc = ""
-        if "Externa" in prev_opt or "Ambas" in prev_opt: 
-            prev_desc = ", ".join(self.tratamientos_externos)
-        if "Clínica" in prev_opt: 
-            prev_desc = f"Historial Interno. {prev_desc}"
+        if "Externa" in prev_opt or "Ambas" in prev_opt: prev_desc = ", ".join(self.tratamientos_externos)
+        if "Clínica" in prev_opt: prev_desc = f"Historial Interno. {prev_desc}"
 
         datos = {
             'cliente_id': self.datos_cita['cliente_id_real'],
@@ -755,40 +759,48 @@ class ModificarCitaView(ctk.CTkFrame):
             'previo_desc': prev_desc
         }
         
-        # LLAMADA AL CONTROLLER CON LA NUEVA LÓGICA
+        # 3. Llamada al Controlador
         status, msg, lista_afectados = self.ctrl.guardar_cambios(self.cita_id, datos, self.current_user_id)
         
         if status == "pregunta_dia":
-            # Caso: Se sale del horario
-            if messagebox.askyesno("Horario Excedido", f"{msg}\n\nSÍ: Cancelar operación para que ajustes manualmente.\nNO: Guardar de todos modos (se excederá el horario de salida)."):
-                return # El usuario decide no guardar para arreglarlo manual
-            else:
-                # El usuario fuerza el guardado (repite la llamada asumiendo riesgo o podriamos tener un flag 'force')
-                # Por simplicidad, asumimos que el SP lo permite y volvemos a llamar 
-                # Ojo: necesitaríamos un flag en el controller para saltar la validación.
-                # Dado el tiempo, mostramos advertencia y guardamos igual si la BD no tiene restricción estricta.
-                messagebox.showinfo("Aviso", "Se guardará la cita excediendo el horario laboral.")
-                # Aquí deberíamos llamar de nuevo forzando, pero el SP de recorre_agenda lo hará.
-                # Simplemente notifica que se guardó "feo".
-                pass
+            if messagebox.askyesno("Horario Excedido", f"{msg}\n\nSÍ: Cancelar para ajustar manual.\nNO: Guardar excediendo horario."):
+                return 
+            else: pass 
 
-        if status == "ok" or status == "pregunta_dia": # Asumiendo éxito final
+        if status == "ok" or status == "pregunta_dia":
+            import time
+            from notifications_helper import NotificationsHelper
             
-            # 1. Notificar al dueño de la cita (Si tiene check activo)
+            # A. Notificar al dueño de la cita actual
             if self.var_notif.get():
                 NotificationsHelper.enviar_notificacion_modificacion(
                     datos['nombre'], datos['fecha'], datos['hora_inicio'], datos['telefono'], datos['email'], es_recorrida=False
                 )
+                time.sleep(1.5)
 
-            # 2. Notificar a los afectados (Recorridos)
-            if lista_afectados:
-                for p in lista_afectados:
-                    if p['notif']: # Solo si el paciente afectado tenía activas las notificaciones
-                        NotificationsHelper.enviar_notificacion_modificacion(
-                            p['nombre'], p['fecha'], p['hora'], p['telefono'], p['email'], es_recorrida=True
-                        )
-            
-            messagebox.showinfo("Éxito", "Cambios guardados y notificaciones enviadas.")
+            # B. MANEJO INTELIGENTE DE AFECTADOS (PROTECCIÓN)
+            cantidad = len(lista_afectados)
+            LIMITE_SEGURO = 10 
+
+            if cantidad > 0:
+                if cantidad <= LIMITE_SEGURO:
+                    # --- MODO AUTOMÁTICO (Hasta 10 afectados) ---
+                    count = 0
+                    for p in lista_afectados:
+                        if p['notif']: 
+                            if count > 0: time.sleep(2.5) 
+                            NotificationsHelper.enviar_notificacion_modificacion(
+                                p['nombre'], p['fecha'], p['hora'], p['telefono'], p['email'], es_recorrida=True
+                            )
+                            count += 1
+                    messagebox.showinfo("Éxito", f"Se guardó y se abrieron {count} notificaciones.")
+                else:
+                    # --- MODO LISTA DE TAREAS (Más de 10) ---
+                    self._mostrar_resumen_masivo(lista_afectados)
+                    messagebox.showinfo("Éxito", "Cambios guardados.\nDebido a la gran cantidad de cambios, usa la lista generada para notificar manualmente.")
+            else:
+                messagebox.showinfo("Éxito", "Cambios guardados correctamente.")
+
             if self.callback_volver: self.callback_volver()
             
         elif status == "error":

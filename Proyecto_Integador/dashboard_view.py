@@ -2,9 +2,8 @@ import customtkinter as ctk
 from tkinter import messagebox
 import sys
 import os
-from PIL import Image, ImageTk 
+from PIL import Image
 import mysql.connector
-from ui_utils import mostrar_loading
 
 # Importación de Vistas
 from agendar_view import AgendarCitaFrame
@@ -18,6 +17,100 @@ from profile_view import ProfileFrame
 from admin_usuarios_view import AdminUsuariosFrame
 from admin_servicios_view import AdminServiciosFrame
 from admin_reportes_view import AdminReportesFrame
+
+# Utils
+from ui_utils import mostrar_loading
+import database # Necesario para validar credenciales en el popup
+
+# ===================================================================
+# CLASE NUEVA: DIÁLOGO DE AUTORIZACIÓN ESTILIZADO
+# ===================================================================
+class AuthDialog(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Autorización Requerida")
+        self.geometry("380x380")
+        self.resizable(False, False)
+        self.transient(parent) # Hace que sea ventana hija
+        self.grab_set() # Bloquea la ventana de atrás (Modal)
+        self.configure(fg_color="#F0F8FF") # Mismo tono azulado suave del login
+
+        # Centrar en pantalla respecto al padre
+        try:
+            x = parent.winfo_rootx() + (parent.winfo_width() // 2) - 190
+            y = parent.winfo_rooty() + (parent.winfo_height() // 2) - 160
+            self.geometry(f"+{x}+{y}")
+        except: pass
+
+        self.resultado = None # Aquí guardaremos los datos si es exitoso
+
+        # --- TARJETA BLANCA ---
+        self.card = ctk.CTkFrame(self, fg_color="white", corner_radius=15, border_color="#D0E4F5", border_width=1)
+        self.card.pack(fill="both", expand=True, padx=20, pady=20)
+
+        ctk.CTkLabel(self.card, text="🔒 Acceso Restringido", font=("Segoe UI", 16, "bold"), text_color="#333").pack(pady=(20, 5))
+        ctk.CTkLabel(self.card, text="Ingresa credenciales de Supervisor", font=("Arial", 11), text_color="gray").pack(pady=(0, 20))
+
+        # --- USUARIO ---
+        self.ent_user = ctk.CTkEntry(
+            self.card, placeholder_text="Usuario Supervisor", height=40, 
+            fg_color="#FAFAFA", border_color="#E0E0E0", text_color="black"
+        )
+        self.ent_user.pack(fill="x", padx=30, pady=(0, 10))
+
+        # --- CONTRASEÑA CON OJO ---
+        pass_frame = ctk.CTkFrame(self.card, fg_color="transparent")
+        pass_frame.pack(fill="x", padx=30, pady=(0, 20))
+        
+        self.ent_pass = ctk.CTkEntry(
+            pass_frame, placeholder_text="Contraseña", show="*", height=40, 
+            fg_color="#FAFAFA", border_color="#E0E0E0", text_color="black"
+        )
+        self.ent_pass.pack(side="left", fill="x", expand=True)
+
+        self.btn_eye = ctk.CTkButton(
+            pass_frame, text="👁", width=35, height=40, 
+            fg_color="transparent", hover_color="#EEE", text_color="#555",
+            command=self.toggle_pass
+        )
+        self.btn_eye.pack(side="right", padx=(5, 0))
+
+        # --- BOTONES ---
+        self.btn_ok = ctk.CTkButton(
+            self.card, text="AUTORIZAR", height=40, 
+            fg_color="#1E90FF", hover_color="#0056b3", font=("Segoe UI", 12, "bold"),
+            command=self.confirmar
+        )
+        self.btn_ok.pack(fill="x", padx=30, pady=(0, 10))
+
+        self.btn_cancel = ctk.CTkButton(
+            self.card, text="Cancelar", height=30, 
+            fg_color="transparent", text_color="gray", hover_color="#F5F5F5",
+            command=self.destroy
+        )
+        self.btn_cancel.pack(fill="x", padx=30)
+
+        self.ent_pass.bind("<Return>", lambda e: self.confirmar())
+        self.ent_user.focus_set()
+
+    def toggle_pass(self):
+        if self.ent_pass.cget("show") == "*":
+            self.ent_pass.configure(show="")
+            self.btn_eye.configure(text="✕")
+        else:
+            self.ent_pass.configure(show="*")
+            self.btn_eye.configure(text="👁")
+
+    def confirmar(self):
+        u = self.ent_user.get().strip()
+        p = self.ent_pass.get().strip()
+        if u and p:
+            self.resultado = (u, p)
+            self.destroy() # Cerramos ventana, la lógica principal validará
+
+# ===================================================================
+# DASHBOARD APP
+# ===================================================================
 
 class DashboardApp:
     def __init__(self, uid, u_nom, u_rol, root):
@@ -60,25 +153,6 @@ class DashboardApp:
         
         self.nav_to("agendar")
 
-    def nav_to(self, name):
-        if not self.b_ag or not self.b_ci or not self.b_pa:
-            self.root.after(100, lambda: self.nav_to(name)) 
-            return
-
-        for b in [self.b_ag, self.b_ci, self.b_pa]: 
-            b.configure(fg_color="transparent", text_color="black")
-        
-        color_activo = "#D6EAF8" 
-        
-        if name == "agendar": self.b_ag.configure(fg_color=color_activo, text_color="#154360")
-        elif name == "citas": self.b_ci.configure(fg_color=color_activo, text_color="#154360")
-        elif name == "pagos": self.b_pa.configure(fg_color=color_activo, text_color="#154360")
-        
-        self._limpiar_contenedor()
-        
-        # --- CAMBIO: USAMOS TIPO='CIRCULO' ---
-        mostrar_loading(self.container, 500, lambda: self._load_view(name), tipo="circulo", mensaje="Cargando vista...")
-
     def obtener_ruta_foto(self):
         try:
             conn = mysql.connector.connect(
@@ -98,7 +172,6 @@ class DashboardApp:
         h = ctk.CTkFrame(self.root, height=60, fg_color="#154360", corner_radius=0)
         h.grid(row=0, column=0, sticky="ew")
         
-        # LOGO CLICKEABLE
         logo_frame = ctk.CTkFrame(h, fg_color="transparent", cursor="hand2") 
         logo_frame.pack(side="left", padx=10, pady=5)
         
@@ -111,7 +184,6 @@ class DashboardApp:
         lbl_tit.bind("<Button-1>", lambda e: self.nav_to("agendar"))
         lbl_sub.bind("<Button-1>", lambda e: self.nav_to("agendar"))
 
-        # USUARIO
         r = ctk.CTkFrame(h, fg_color="transparent")
         r.pack(side="right", padx=20)
         
@@ -136,7 +208,7 @@ class DashboardApp:
         if not imagen_perfil:
             rol_lower = self.root.rol.lower()
             if "doctor" in rol_lower: texto_emoji = "👩‍⚕️"
-            elif "recepcionista" in rol_lower: texto_emoji = "💁‍♀️"
+            elif "recepcionista" in rol_lower: texto_emoji = "📋🛎️"
             else: texto_emoji = "🧑‍💻"
 
         btn_perfil = ctk.CTkButton(
@@ -195,6 +267,9 @@ class DashboardApp:
         self.b_pa.pack(side="left", padx=5)
 
     def nav_to(self, name):
+        # --- FIX DE FOCO: Quitamos el foco de cualquier entry anterior ---
+        self.root.focus_set() 
+        
         if not self.b_ag or not self.b_ci or not self.b_pa:
             self.root.after(100, lambda: self.nav_to(name)) 
             return
@@ -204,38 +279,28 @@ class DashboardApp:
         
         color_activo = "#D6EAF8" 
         
-        if name == "agendar": 
-            self.b_ag.configure(fg_color=color_activo, text_color="#154360")
-        elif name == "citas": 
-            self.b_ci.configure(fg_color=color_activo, text_color="#154360")
-        elif name == "pagos": 
-            self.b_pa.configure(fg_color=color_activo, text_color="#154360")
+        if name == "agendar": self.b_ag.configure(fg_color=color_activo, text_color="#154360")
+        elif name == "citas": self.b_ci.configure(fg_color=color_activo, text_color="#154360")
+        elif name == "pagos": self.b_pa.configure(fg_color=color_activo, text_color="#154360")
         
-        self.root.after(50, lambda: self._load_view(name))
+        self._limpiar_contenedor()
+        
+        # Usamos la carga con Spinner Redondo
+        mostrar_loading(self.container, 500, lambda: self._load_view(name), tipo="circulo", mensaje="Cargando...")
 
-    # --- FUNCIÓN NUEVA: LIMPIEZA NUCLEAR ---
     def _limpiar_contenedor(self):
-        # 1. Destruir referencia lógica
         if self.curr_view: 
-            try:
-                self.curr_view.destroy()
+            try: self.curr_view.destroy()
             except: pass
             self.curr_view = None
         
-        # 2. BARRIDO FÍSICO: Destruir cualquier hijo que quede en el contenedor
-        # Esto elimina barras de scroll fantasmas o frames pegados
         for widget in self.container.winfo_children():
-            try:
-                widget.destroy()
+            try: widget.destroy()
             except: pass
             
-        # 3. Forzar actualización de la interfaz para redibujar el vacío
         self.container.update_idletasks()
 
     def _load_view(self, name):
-        # Usamos la limpieza nuclear
-        self._limpiar_contenedor()
-        
         if name == "citas":
             self.curr_view = CalendarFrame(self.container, callback_modificar=self.ir_a_modificar_cita)
             self.curr_view.pack(fill="both", expand=True)
@@ -246,26 +311,25 @@ class DashboardApp:
                 self.curr_view.pack(fill="both", expand=True)
 
     def _load_admin(self, cls_or_lambda):
-        self._limpiar_contenedor()
+        self.root.focus_set() # Fix foco también aquí
         
+        # Reset visual botones nav
         if self.b_ag and self.b_ci and self.b_pa:
             for b in [self.b_ag, self.b_ci, self.b_pa]: 
                 b.configure(fg_color="transparent", text_color="black")
         
         def _accion_real():
+            self._limpiar_contenedor() # Limpieza justo antes de crear
             if isinstance(cls_or_lambda, type):
                 self.curr_view = cls_or_lambda(self.container)
             else:
                 self.curr_view = cls_or_lambda(self.container)
             self.curr_view.pack(fill="both", expand=True)
 
-        # --- CAMBIO: USAMOS TIPO='CIRCULO' ---
         mostrar_loading(self.container, 500, _accion_real, tipo="circulo", mensaje="Cargando...")
 
     def ir_a_modificar_cita(self, cita_id):
-        # También aquí por si acaso
         self._limpiar_contenedor()
-        
         self.curr_view = ModificarCitaView(
             self.container, 
             cita_id, 
@@ -300,38 +364,29 @@ class DashboardApp:
             except: pass
 
     def abrir_mi_perfil_directo(self):
-        if isinstance(self.curr_view, ProfileFrame):
-            return 
+        if isinstance(self.curr_view, ProfileFrame): return 
         self._load_admin(lambda parent: ProfileFrame(parent, self.root.user_id, self.root.rol))
 
     def on_conf_action(self, act):
         if self.conf_panel: self.conf_panel.destroy(); self.conf_panel=None
         
         # --- LÓGICA DE PERMISOS JERÁRQUICOS ---
-        rol_efectivo = self.root.rol # Por defecto es tu propio rol
+        rol_efectivo = self.root.rol 
 
-        # Si soy Recepcionista y quiero entrar a zonas restringidas, pido permiso
         if self.root.rol == "Recepcionista" and act in ["Administración de Cuentas", "Cotización de Servicios"]:
             rol_autorizado = self._solicitar_permiso_supervisor()
             if not rol_autorizado:
-                return # Si cancela o falla, no entramos
-            rol_efectivo = rol_autorizado # HEREDA EL PODER (Admin o Doctora)
+                return 
+            rol_efectivo = rol_autorizado 
 
-        # --- NAVEGACIÓN CON ROL EFECTIVO ---
         if act == "Mi Perfil": 
             self.abrir_mi_perfil_directo()
-        
         elif act == "Administración de Cuentas": 
-            # Pasamos el rol_efectivo a la vista
             self._load_admin(lambda p: AdminUsuariosFrame(p, rol_contexto=rol_efectivo))
-        
         elif act == "Cotización de Servicios": 
-            # Pasamos el rol_efectivo a la vista
             self._load_admin(lambda p: AdminServiciosFrame(p, rol_contexto=rol_efectivo))
-            
         elif act == "Reportes y Estadisticas": 
             self._load_admin(AdminReportesFrame)
-            
         elif "Cerrar Sesión" in act:
             if messagebox.askyesno("Cerrar Sesión", "¿Deseas cerrar tu sesión actual?"):
                 self.logout()
@@ -340,32 +395,24 @@ class DashboardApp:
                 self.root.destroy(); sys.exit()
 
     def _solicitar_permiso_supervisor(self):
-        """Muestra popup y retorna el ROL del supervisor que autorizó (o None)"""
-        dialog = ctk.CTkInputDialog(text="Requiere autorización (Admin/Doctora)\nIngrese Usuario:", title="Acceso Restringido")
-        # Truco para centrar el popup (opcional)
-        try: dialog.geometry(f"+{self.root.winfo_x()+100}+{self.root.winfo_y()+100}")
-        except: pass
+        """Muestra el NUEVO popup estilizado y retorna el ROL del supervisor (o None)"""
         
-        user = dialog.get_input()
-        if not user: return None
+        # 1. Crear e invocar el diálogo personalizado
+        dialogo = AuthDialog(self.root)
+        self.root.wait_window(dialogo) # Esperar a que se cierre
         
-        dialog_pass = ctk.CTkInputDialog(text=f"Usuario: {user}\nIngrese Contraseña:", title="Credenciales")
-        try: dialog_pass.geometry(f"+{self.root.winfo_x()+100}+{self.root.winfo_y()+100}")
-        except: pass
+        if not dialogo.resultado: return None
         
-        pwd = dialog_pass.get_input()
-        if not pwd: return None
+        user, pwd = dialogo.resultado
 
-        # Validamos usando la BD directamente o controller
-        # Nota: Usamos database.validar_login para obtener el rol real del supervisor
-        import database
+        # 2. Validar credenciales
         datos = database.validar_login(user, pwd)
         
         if datos:
             rol_sup = datos['rol']
             if rol_sup in ["Administrador", "Doctora"]:
                 messagebox.showinfo("Autorizado", f"Acceso concedido por: {datos['nombre_completo']} ({rol_sup})")
-                return rol_sup # RETORNAMOS EL ROL DEL JEFE
+                return rol_sup 
             else:
                 messagebox.showerror("Error", "Este usuario no tiene permisos para autorizar.")
         else:
@@ -385,3 +432,4 @@ class DashboardApp:
             except: self.root.geometry("1300x800")
             DashboardApp(uid, nom, rol, self.root)
         LoginApp(self.root, on_login_success=relogin_cb)
+        

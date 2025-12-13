@@ -5,9 +5,7 @@ class AdminController:
     def __init__(self):
         pass
 
-    # ==========================
     # GESTIÓN DE USUARIOS
-    # ==========================
     def obtener_usuarios(self):
         return database.admin_obtener_usuarios()
     
@@ -18,7 +16,6 @@ class AdminController:
             if u['id'] == uid: return u
         return None
 
-    # MODIFICADO: Acepta especialidad
     def crear_usuario(self, nombre, user, pasw, rol, especialidad="General"):
         if not nombre or not user or not pasw or not rol: 
             return False, "Todos los campos son obligatorios."
@@ -30,10 +27,8 @@ class AdminController:
             
         return database.admin_guardar_usuario(nombre, user, pasw, rol, especialidad)
     
-    # MODIFICADO: Acepta especialidad
     def actualizar_usuario(self, uid, nombre, user, rol, pasw="", especialidad="General"):
         if not nombre or not user: return False, "Nombre y Usuario obligatorios."
-        # Si pasw viene vacío, se manda None para no cambiarla
         return database.admin_actualizar_usuario(uid, nombre, user, rol, pasw if pasw.strip() else None, especialidad)
 
     def eliminar_usuario(self, uid_a_borrar, uid_sesion_actual, rol_sesion_actual):
@@ -41,16 +36,14 @@ class AdminController:
         if uid_a_borrar == uid_sesion_actual:
             return False, "⚠️ ACCIÓN DENEGADA\nNo puedes eliminar tu propia cuenta mientras estás conectado."
         
-        # 2. PROTECCIÓN DE JERARQUÍA (Opcional: Doctora no borra Admin)
+        # 2. PROTECCIÓN DE JERARQUÍA
         target = self.obtener_usuario_por_id(uid_a_borrar)
         if target and target['rol'] == 'Administrador' and rol_sesion_actual != 'Administrador':
              return False, "⚠️ ACCIÓN DENEGADA\nSolo un Administrador puede eliminar a otro Administrador."
 
         return database.admin_eliminar_usuario(uid_a_borrar)
 
-    # ==========================
     # MI PERFIL
-    # ==========================
     def actualizar_mi_perfil(self, uid, nombre, user, pasw=""):
         if not nombre or not user: return False, "Datos vacíos."
         
@@ -62,9 +55,7 @@ class AdminController:
         
         return database.admin_actualizar_usuario(uid, nombre, user, yo['rol'], pasw if pasw.strip() else None, especialidad_actual)
 
-    # ==========================
     # SERVICIOS Y CATÁLOGO
-    # ==========================
     def validar_supervisor(self, user, pwd):
         if not user or not pwd: return False
         return database.validar_credenciales_supervisor(user, pwd)
@@ -107,22 +98,19 @@ class AdminController:
     def obtener_subcategorias(self, categoria):
         return database.obtener_subcategorias_filtro(categoria)
 
-    # ==========================
     # REPORTES Y GRÁFICAS
-    # ==========================
     def obtener_kpis(self):
         return database.reporte_kpis_generales()
 
     def datos_grafica_pastel(self): 
         # Retorna (Etiquetas, Valores) para Matplotlib
-        d = database.reporte_top_tratamientos() # [(Nombre, Cant), ...]
+        d = database.reporte_top_tratamientos()
         if not d: return [], []
         return ([x[0] for x in d], [x[1] for x in d])
 
     def datos_grafica_linea(self):
         # Retorna (Meses, Dineros)
-        d = database.reporte_ingresos_semestral() # [(Mes, Monto), ...]
-        # La BD los devuelve DESC (más nuevo primero), para la gráfica los queremos ASC (cronológico)
+        d = database.reporte_ingresos_semestral()
         d.reverse()
         return ([x[0] for x in d], [float(x[1]) for x in d])
     
@@ -143,7 +131,7 @@ class AdminController:
         edades = database.reporte_demografia_edad()
         generos = database.reporte_demografia_genero()
         
-        # Procesar géneros para que se vea bonito (M -> Masculino)
+        # Procesar géneros
         gen_labels = []
         gen_vals = []
         for g, cant in generos:
@@ -152,8 +140,8 @@ class AdminController:
             gen_vals.append(cant)
             
         return (
-            ([x[0] for x in edades], [x[1] for x in edades]), # Datos Edad
-            (gen_labels, gen_vals)                            # Datos Género
+            ([x[0] for x in edades], [x[1] for x in edades]),
+            (gen_labels, gen_vals)
         )
 
     def datos_rendimiento_doctores(self):

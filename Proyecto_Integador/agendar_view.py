@@ -712,11 +712,32 @@ class AgendarCitaFrame(ctk.CTkFrame):
         self.results_frame.pack_forget()
 
     def limpiar_busqueda(self):
+        # 1. Limpiar el input de búsqueda y ocultar la lista de resultados
         self.ent_bus.delete(0, 'end')
         self.results_frame.pack_forget()
-        self.reset_form_only()
-        if self.modo_var.get() == "Paciente Existente":
-            self.ent_nom.configure(state="disabled")
+
+        # 2. Limpiar los campos de datos (Nombre, Tel, Email, etc.)
+        # Habilitamos temporalmente el nombre para poder borrarlo
+        self.ent_nom.configure(state="normal") 
+        self.ent_nom.delete(0, 'end')
+        self.ent_tel.delete(0, 'end')
+        self.ent_email.delete(0, 'end')
+        
+        # Limpiar notas y placeholder
+        self.txt_nota.delete("1.0", "end")
+        self.lbl_ph.place(x=5, y=5)
+
+        # Resetear selectores y variables internas
+        self.cliente_existente_id = None
+        self.cmb_edad.set("Edad")
+        self.cmb_gen.set("Género")
+        
+        # Resetear Tratamiento Previo
+        self.cmb_prev_opt.set("Tratamiento previo: No")
+        self.toggle_prev("Tratamiento previo: No")
+        
+        # 3. CLAVE: Volver a bloquear el nombre
+        self.ent_nom.configure(state="disabled")
 
     def reset_form_only(self):
         # 1. Limpiar campos de texto simples
@@ -821,8 +842,6 @@ class AgendarCitaFrame(ctk.CTkFrame):
             
             prev_opt = self.cmb_prev_opt.get()
             prev_desc = ""
-            
-            # Construcción de la descripción
             if "Externa" in prev_opt or "Ambas" in prev_opt:
                 prev_desc = ", ".join(self.tratamientos_externos)
             if "Clínica" in prev_opt: 
@@ -831,13 +850,10 @@ class AgendarCitaFrame(ctk.CTkFrame):
             raw_min = int(self.slider_dur.get())
             dur_str = f"{raw_min} min"
 
-            # --- CORRECCIÓN LÓGICA AQUÍ TAMBIÉN ---
-            # Si se escribió algo en tratamientos o se seleccionó una opción válida, es tp=1
+            # Lógica correcta para TP
             es_previo = ("Externa" in prev_opt) or ("Clínica" in prev_opt) or ("Ambas" in prev_opt)
-            # También si hay texto manual en la descripción externa
             if self.tratamientos_externos: es_previo = True
-            
-            # Este diccionario se manda al controller, pero añadimos el campo 'previo_desc' correcto
+
             d = {
                 'cliente_id_existente': self.cliente_existente_id, 
                 'nombre': self.ent_nom.get().strip(), 
@@ -860,7 +876,7 @@ class AgendarCitaFrame(ctk.CTkFrame):
             if ok:
                 messagebox.showinfo("Éxito", m)
                 
-                # INTENTAR ENVIAR NOTIFICACIÓN (Protegido)
+                # Intentar notificar usando el Helper nuevo
                 try:
                     if self.var_notif.get():
                         from notifications_helper import NotificationsHelper
@@ -868,12 +884,11 @@ class AgendarCitaFrame(ctk.CTkFrame):
                             d['nombre'], d['fecha'], hf, d['telefono'], d['email']
                         )
                 except Exception as e:
-                    print(f"No se pudo abrir WhatsApp/Correo: {e}")
+                    print(f"Error al notificar: {e}")
 
-                # LIMPIAR SIEMPRE
+                # Limpiar siempre
                 self.reset()
                 self.create_sidebar()
-                
             else: 
                 messagebox.showerror("Error", m)
                 

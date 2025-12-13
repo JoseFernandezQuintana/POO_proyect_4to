@@ -427,14 +427,17 @@ def sincronizar_estados_bd():
     finally: conexion.close()
 
 def ejecutar_sp_fetch_one(sp_name, args):
-    """Ejecuta un SP y devuelve la primera fila (para conflictos)"""
+    """Ejecuta un Procedimiento Almacenado y devuelve el primer resultado."""
     conexion = crear_conexion()
     if not conexion: return None
     try:
         cursor = conexion.cursor()
         cursor.callproc(sp_name, args)
+        
+        # Iterar sobre los resultados almacenados
         for result in cursor.stored_results():
-            return result.fetchone()
+            return result.fetchone() # Retorna la primera fila encontrada
+            
         return None
     except Exception as e:
         print(f"Error SP {sp_name}: {e}")
@@ -442,7 +445,7 @@ def ejecutar_sp_fetch_one(sp_name, args):
     finally: conexion.close()
 
 def ejecutar_sp(sp_name, args):
-    """Ejecuta un SP sin devolver datos (para recorrer agenda)"""
+    """Ejecuta un Procedimiento Almacenado sin devolver datos (para updates)."""
     conexion = crear_conexion()
     if not conexion: return False
     try:
