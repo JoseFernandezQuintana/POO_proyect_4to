@@ -20,7 +20,7 @@ from admin_reportes_view import AdminReportesFrame
 
 # Utils
 from ui_utils import mostrar_loading
-import database # Necesario para validar credenciales en el popup
+import database
 
 # ===================================================================
 # CLASE NUEVA: DIÁLOGO DE AUTORIZACIÓN ESTILIZADO
@@ -31,11 +31,11 @@ class AuthDialog(ctk.CTkToplevel):
         self.title("Autorización Requerida")
         self.geometry("380x380")
         self.resizable(False, False)
-        self.transient(parent) # Hace que sea ventana hija
+        self.transient(parent)
         self.grab_set() # Bloquea la ventana de atrás (Modal)
-        self.configure(fg_color="#F0F8FF") # Mismo tono azulado suave del login
+        self.configure(fg_color="#F0F8FF")
 
-        # Centrar en pantalla respecto al padre
+        # Centrar en pantalla
         try:
             x = parent.winfo_rootx() + (parent.winfo_width() // 2) - 190
             y = parent.winfo_rooty() + (parent.winfo_height() // 2) - 160
@@ -58,7 +58,7 @@ class AuthDialog(ctk.CTkToplevel):
         )
         self.ent_user.pack(fill="x", padx=30, pady=(0, 10))
 
-        # --- CONTRASEÑA CON OJO ---
+        # --- CONTRASEÑA ---
         pass_frame = ctk.CTkFrame(self.card, fg_color="transparent")
         pass_frame.pack(fill="x", padx=30, pady=(0, 20))
         
@@ -111,7 +111,6 @@ class AuthDialog(ctk.CTkToplevel):
 # ===================================================================
 # DASHBOARD APP
 # ===================================================================
-
 class DashboardApp:
     def __init__(self, uid, u_nom, u_rol, root):
         self.root = root
@@ -267,7 +266,6 @@ class DashboardApp:
         self.b_pa.pack(side="left", padx=5)
 
     def nav_to(self, name):
-        # --- FIX DE FOCO: Quitamos el foco de cualquier entry anterior ---
         self.root.focus_set() 
         
         if not self.b_ag or not self.b_ci or not self.b_pa:
@@ -311,7 +309,7 @@ class DashboardApp:
                 self.curr_view.pack(fill="both", expand=True)
 
     def _load_admin(self, cls_or_lambda):
-        self.root.focus_set() # Fix foco también aquí
+        self.root.focus_set()
         
         # Reset visual botones nav
         if self.b_ag and self.b_ci and self.b_pa:
@@ -319,7 +317,7 @@ class DashboardApp:
                 b.configure(fg_color="transparent", text_color="black")
         
         def _accion_real():
-            self._limpiar_contenedor() # Limpieza justo antes de crear
+            self._limpiar_contenedor()
             if isinstance(cls_or_lambda, type):
                 self.curr_view = cls_or_lambda(self.container)
             else:
@@ -391,8 +389,8 @@ class DashboardApp:
             if messagebox.askyesno("Cerrar Sesión", "¿Deseas cerrar tu sesión actual?"):
                 self.logout()
         elif "Cerrar App" in act:
-             if messagebox.askyesno("Salir", "¿Estás seguro de que quieres salir?"):
-                self.root.destroy(); sys.exit()
+            if messagebox.askyesno("Salir", "¿Estás seguro de que quieres salir?"):
+                self.root.event_generate("WM_DELETE_WINDOW")
 
     def _solicitar_permiso_supervisor(self):
         """Muestra el NUEVO popup estilizado y retorna el ROL del supervisor (o None)"""

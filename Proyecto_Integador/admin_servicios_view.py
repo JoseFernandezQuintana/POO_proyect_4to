@@ -2,7 +2,6 @@ import customtkinter as ctk
 from tkinter import messagebox
 import json
 from admin_controller import AdminController
-import database 
 
 BG_MAIN = "#F4F6F9"
 WHITE = "#FFFFFF"
@@ -22,7 +21,6 @@ class AdminServiciosFrame(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
-        # Evento para quitar foco al dar clic en el fondo (Solo si no es Entry)
         self.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, self))
 
         # 1. Header
@@ -31,7 +29,6 @@ class AdminServiciosFrame(ctk.CTkFrame):
         
         ctk.CTkLabel(top, text="🦷 Catálogo de Servicios", font=("Segoe UI", 20, "bold"), text_color=ACCENT).pack(side="left")
         
-        # Botón Nuevo
         txt_btn = "🔒 + Nuevo (Req. Supervisor)" if self.rol_actual == "Recepcionista" else "+ Nuevo Servicio"
         col_btn = "#6C757D" if self.rol_actual == "Recepcionista" else "#28A745"
         ctk.CTkButton(top, text=txt_btn, fg_color=col_btn, command=self.verificar_permiso_nuevo).pack(side="right")
@@ -42,16 +39,12 @@ class AdminServiciosFrame(ctk.CTkFrame):
         # 3. Lista
         self.scroll = ctk.CTkScrollableFrame(self, fg_color=WHITE, corner_radius=10)
         self.scroll.grid(row=2, column=0, sticky="nsew", padx=20, pady=(0, 20))
-        
-        # También aplicamos el quitar foco al scroll
         self.scroll.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, self))
         
         self.cargar_lista()
 
     def _quitar_foco_inteligente(self, event, widget_destino):
-        """ Quita el foco solo si NO se hizo clic en una entrada de texto """
         try:
-            # winfo_class devuelve 'Entry' para Inputs, 'Text' para Textbox, etc.
             clase = event.widget.winfo_class()
             if "Entry" not in clase and "Text" not in clase:
                 widget_destino.focus()
@@ -62,7 +55,9 @@ class AdminServiciosFrame(ctk.CTkFrame):
         f.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 15))
         f.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, self))
         
-        cats = ["Todas"] + database.obtener_columnas_unicas("categoria")
+        # Obtenemos categorías a través del controller
+        cats = ["Todas"] + (self.controller.obtener_categorias() or [])
+        
         ctk.CTkLabel(f, text="Categoría:", font=("bold", 11)).pack(side="left", padx=(15,5))
         self.cmb_cat = ctk.CTkOptionMenu(f, values=cats, width=150, command=self.actualizar_subs, fg_color="#FAFAFA", text_color="#333", button_color="#CCC")
         self.cmb_cat.pack(side="left", padx=5, pady=10)
@@ -78,11 +73,9 @@ class AdminServiciosFrame(ctk.CTkFrame):
         ctk.CTkButton(f, text="Limpiar", width=60, fg_color="#DDD", text_color="black", command=self.reset_filtros).pack(side="left", padx=(0,15))
 
     def cargar_lista(self):
-        # 1. Limpiar
         for w in self.scroll.winfo_children(): w.destroy()
         
-        # 2. Consultar BD
-        servicios = database.buscar_servicios_avanzado(
+        servicios = self.controller.buscar_servicios(
             self.ent_search.get(), 
             self.cmb_cat.get(), 
             self.cmb_sub.get()
@@ -92,48 +85,33 @@ class AdminServiciosFrame(ctk.CTkFrame):
             ctk.CTkLabel(self.scroll, text="No se encontraron servicios.", text_color="gray").pack(pady=20)
             return
 
-        # 3. ENCABEZADOS (TABLA REAL con GRID)
         h = ctk.CTkFrame(self.scroll, fg_color="#F1F1F1", height=40)
         h.pack(fill="x", pady=(0, 5))
-        
-        # --- DEFINICIÓN DE COLUMNAS FIJAS (PROPORCIONES) ---
-        # Col 0: Info (Flexible, toma el espacio sobrante)
         h.grid_columnconfigure(0, weight=1) 
-        # Col 1: Precios (Ancho mínimo fijo de 350px para centrar bien la lista)
         h.grid_columnconfigure(1, weight=0, minsize=350) 
-        # Col 2: Acciones (Ancho mínimo fijo de 100px a la derecha)
         h.grid_columnconfigure(2, weight=0, minsize=100)
 
         ctk.CTkLabel(h, text="SERVICIO / CATEGORÍA", font=("bold", 11), anchor="w").grid(row=0, column=0, sticky="ew", padx=20, pady=10)
         ctk.CTkLabel(h, text="LISTA DE PRECIOS", font=("bold", 11), anchor="center").grid(row=0, column=1, sticky="ew", pady=10)
         ctk.CTkLabel(h, text="ACCIONES", font=("bold", 11), anchor="center").grid(row=0, column=2, sticky="ew", padx=10, pady=10)
 
-        # 4. ITERACIÓN DE SERVICIOS
         for s in servicios:
-            # Fila contenedora
             row = ctk.CTkFrame(self.scroll, fg_color=WHITE, corner_radius=8, border_color="#E0E0E0", border_width=1)
             row.pack(fill="x", pady=4, padx=5)
             row.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, self))
-
-            # --- APLICAMOS LA MISMA GRID AL CONTENIDO ---
             row.grid_columnconfigure(0, weight=1) 
             row.grid_columnconfigure(1, weight=0, minsize=350) 
             row.grid_columnconfigure(2, weight=0, minsize=100)
 
-            # [COLUMNA 0] INFO IZQUIERDA
             left_box = ctk.CTkFrame(row, fg_color="transparent")
             left_box.grid(row=0, column=0, sticky="nsew", padx=15, pady=10)
-            
             ctk.CTkLabel(left_box, text=s['nombre'], font=("Segoe UI", 12, "bold"), text_color="#333", wraplength=200, justify="left").pack(anchor="w")
             ctk.CTkLabel(left_box, text=f"{s['categoria']} > {s['subcategoria']}", font=("Arial", 10), text_color="gray").pack(anchor="w")
 
-            # [COLUMNA 1] VARIANTES (CENTRADAS EN SU COLUMNA FIJA)
             center_box = ctk.CTkFrame(row, fg_color="transparent")
-            center_box.grid(row=0, column=1, sticky="ns", pady=10) # sticky="ns" centra horizontalmente en la col 1
-            
-            # Sub-Grid interna para alinear texto y botones perfectamente
-            center_box.grid_columnconfigure(0, weight=1) # Texto (pegado a derecha)
-            center_box.grid_columnconfigure(1, weight=1) # Botón (pegado a izquierda)
+            center_box.grid(row=0, column=1, sticky="ns", pady=10) 
+            center_box.grid_columnconfigure(0, weight=1) 
+            center_box.grid_columnconfigure(1, weight=1) 
 
             raw_units = s.get('tipo_unidad', 'Unidad').replace("/", " o ")
             lista_unidades = raw_units.split(" o ")
@@ -146,11 +124,8 @@ class AdminServiciosFrame(ctk.CTkFrame):
             for i, unidad in enumerate(lista_unidades):
                 unidad = unidad.strip()
                 if not unidad: continue
-                
-                # Etiqueta Unidad (Col 0, sticky="e" -> derecha)
                 ctk.CTkLabel(center_box, text=f"• {unidad}", font=("Segoe UI", 11), text_color="#555").grid(row=i, column=0, sticky="e", padx=(0, 10), pady=2)
 
-                # Botón Precio (Col 1, sticky="w" -> izquierda)
                 precio_val = float(precios_json.get(unidad, s['precio_base']))
                 txt_p = f"${precio_val:,.2f}" if precio_val > 0 else "Cotizar"
                 col_btn = "#E3F2FD" if precio_val > 0 else "#FFF3CD"
@@ -163,9 +138,6 @@ class AdminServiciosFrame(ctk.CTkFrame):
                     ctk.CTkButton(center_box, text=txt_p, width=90, height=24, fg_color=col_btn, text_color=txt_col, hover_color="#D0E4F5",
                                   font=("bold", 11), command=cmd_edit).grid(row=i, column=1, sticky="w", pady=2)
 
-            # [COLUMNA 2] ACCIONES (SOLUCIÓN BORDES)
-            # Al estar en una celda Grid dedicada, el pady=15 asegura que la celda crezca
-            # y no corte los bordes del botón.
             if self.rol_actual != "Recepcionista":
                 ctk.CTkButton(row, text="× Eliminar", width=80, fg_color="#FFF0F0", text_color="#DC3545", hover_color="#FFE5E5", 
                               border_color="#DC3545", border_width=1, 
@@ -175,7 +147,6 @@ class AdminServiciosFrame(ctk.CTkFrame):
         dialog = ctk.CTkInputDialog(text=f"Nuevo precio para:\n'{nombre_variante}'\n(Escribe 0 para Cotizar)", title="Editar Precio")
         try: dialog.geometry(f"+{self.winfo_rootx()+100}+{self.winfo_rooty()+100}")
         except: pass
-        
         val = dialog.get_input()
         if val is not None:
             clean_val = val.replace('$','').replace(',','')
@@ -190,11 +161,11 @@ class AdminServiciosFrame(ctk.CTkFrame):
         self.cmb_cat.set("Todas")
         self.actualizar_subs("Todas")
         self.ent_search.delete(0, 'end')
-        self.focus() # Quitar foco
+        self.focus() 
         self.cargar_lista()
 
     def actualizar_subs(self, cat):
-        subs = ["Todas"] + (database.obtener_subcategorias_filtro(cat) if cat != "Todas" else [])
+        subs = ["Todas"] + (self.controller.obtener_subcategorias(cat) if cat != "Todas" else [])
         self.cmb_sub.configure(values=subs)
         self.cmb_sub.set("Todas")
         self.cargar_lista()
@@ -209,8 +180,7 @@ class AdminServiciosFrame(ctk.CTkFrame):
         top = ctk.CTkToplevel(self)
         top.title("Autorización"); top.geometry("300x200")
         top.transient(self.winfo_toplevel()); top.grab_set()
-        
-        top.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, top)) # Bind inteligente aquí también
+        top.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, top))
 
         ctk.CTkLabel(top, text="Requiere Supervisor", font=("bold",14)).pack(pady=10)
         u = ctk.CTkEntry(top, placeholder_text="Usuario", fg_color="#FAFAFA"); u.pack(fill="x", padx=20, pady=5)
@@ -232,8 +202,6 @@ class AdminServiciosFrame(ctk.CTkFrame):
         top.geometry("550x650")
         top.transient(self.winfo_toplevel())
         top.grab_set()
-        
-        # --- SOLUCIÓN: Usamos el método inteligente en lugar del focus() directo ---
         top.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, top))
 
         scroll = ctk.CTkScrollableFrame(top, fg_color="transparent")
@@ -242,7 +210,7 @@ class AdminServiciosFrame(ctk.CTkFrame):
         
         ctk.CTkLabel(scroll, text="Registrar Nuevo Servicio", font=("bold", 18), text_color=ACCENT).pack(pady=10)
         
-        cats = database.obtener_columnas_unicas("categoria") or ["General"]
+        cats = self.controller.obtener_categorias() or ["General"]
         if "Otros" not in cats: cats.append("Otros") 
 
         ctk.CTkLabel(scroll, text="Categoría:", font=("bold",12)).pack(anchor="w", padx=20)
@@ -275,10 +243,8 @@ class AdminServiciosFrame(ctk.CTkFrame):
             row.bind("<Button-1>", lambda e: self._quitar_foco_inteligente(e, top))
             
             ctk.CTkLabel(row, text="Por", font=("bold", 12), text_color="#555").pack(side="left", padx=(5,2))
-            
             u = ctk.CTkEntry(row, placeholder_text=f"unidad {i+1} (ej: diente)", width=150, fg_color="#FAFAFA", border_color="#CCC")
             u.pack(side="left", fill="x", expand=True)
-            
             p = ctk.CTkEntry(row, placeholder_text="$", width=80, fg_color="#FAFAFA", border_color="#CCC")
             p.pack(side="right", padx=(5,0))
             filas_variantes.append((u,p))
@@ -288,11 +254,9 @@ class AdminServiciosFrame(ctk.CTkFrame):
             for u_obj, p_obj in filas_variantes:
                 uni = u_obj.get().strip()
                 pre_str = p_obj.get().strip()
-                
                 if uni:
                     uni_capital = uni.capitalize() 
                     nombre_final = f"Por {uni_capital}" 
-                    
                     try: val_pre = float(pre_str) if pre_str else 0.0
                     except: val_pre = 0.0
                     opciones_dict[nombre_final] = val_pre
@@ -311,3 +275,4 @@ class AdminServiciosFrame(ctk.CTkFrame):
                 messagebox.showerror("Error", msg, parent=top)
 
         ctk.CTkButton(scroll, text="GUARDAR SERVICIO", command=guardar, fg_color="#28A745", height=45, font=("bold", 12)).pack(pady=20, padx=20, fill="x")
+        

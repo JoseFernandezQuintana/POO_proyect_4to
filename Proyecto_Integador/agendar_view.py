@@ -373,35 +373,33 @@ class AgendarCitaFrame(ctk.CTkFrame):
             ctk.CTkLabel(left_info, text=s['nombre'], font=("Segoe UI", 12, "bold"), text_color="#333").pack(anchor="w")
             ctk.CTkLabel(left_info, text=f"{s['categoria']}", font=("Arial", 9), text_color="gray").pack(anchor="w")
             
-            # Info Derecha (Precio y Botón)
+            # Info Derecha
             right_box = ctk.CTkFrame(c, fg_color="transparent")
             right_box.pack(side="right", padx=10)
             
             unidad_str = s.get('tipo_unidad', 'Unidad')
             ctk.CTkLabel(right_box, text=unidad_str, font=("Segoe UI", 10, "bold"), text_color="#555").pack(side="left", padx=(0, 15))
             
-            # Precio Base visual (Si es 0 sale Cotizar, si no sale el precio base)
+            # Precio Base visual
             p_base = float(s['precio_base'])
             if p_base > 0:
                 txt_p = f"${p_base:,.2f}"
-                col_p = "#007BFF" # Azul
+                col_p = "#007BFF"
             else:
                 txt_p = "Cotizar"
-                col_p = "#FFC107" # Amarillo
+                col_p = "#FFC107"
             
             ctk.CTkLabel(right_box, text=txt_p, font=("bold", 12), text_color=col_p).pack(side="left", padx=(0, 15))
             
-            # Botón Agregar (Llama a análisis de variantes)
+            # Botón Agregar
             ctk.CTkButton(right_box, text="+ Agregar", width=80, fg_color="#28A745", hover_color="#218838", 
                           command=lambda item=s: self._analizar_variantes(item)).pack(side="left")
 
     def _analizar_variantes(self, item):
         unidad = item.get('tipo_unidad', '')
-        # Si detectamos " o " (ej: Por boca o diente) o "/" abrimos el menú
         if " o " in unidad or "/" in unidad: 
             self._abrir_selector_variante(item)
         else: 
-            # Si es simple, pasa directo con el precio base
             self._agregar_servicio_final(item, 1, unidad, item['precio_base'])
 
     def _abrir_selector_variante(self, item):
@@ -410,11 +408,11 @@ class AgendarCitaFrame(ctk.CTkFrame):
         # Crear ventana emergente (Popup)
         var_win = ctk.CTkToplevel(self.top_serv)
         var_win.title("Selecciona Opción")
-        var_win.geometry("350x250") # Un poco más alto para que quepan botones
+        var_win.geometry("350x250") 
         var_win.transient(self.top_serv)
         var_win.grab_set()
         
-        # Centrar visualmente (opcional)
+        # Centrar visualmente
         try: var_win.geometry(f"+{self.top_serv.winfo_rootx()+50}+{self.top_serv.winfo_rooty()+50}")
         except: pass
 
@@ -438,11 +436,11 @@ class AgendarCitaFrame(ctk.CTkFrame):
             # Determinar precio: Buscamos en el JSON, si no está, usamos el base
             precio_real = float(precios_dict.get(op, item['precio_base']))
             
-            # Texto del botón: "Por boca - $500.00" o "Por boca - Cotizar"
+            # Texto del botón
             txt_precio = f"${precio_real:,.2f}" if precio_real > 0 else "Cotizar"
             texto_boton = f"{op}  ➔  {txt_precio}"
             
-            # Color del botón (Azul normal, Amarillo si es cotizar/0)
+            # Color del botón
             fg_col = "#007BFF" if precio_real > 0 else "#FFC107"
             text_col = "white" if precio_real > 0 else "black"
 
@@ -454,7 +452,6 @@ class AgendarCitaFrame(ctk.CTkFrame):
                 fg_color=fg_col,
                 text_color=text_col,
                 font=("Segoe UI", 12, "bold"),
-                # Al dar clic, enviamos ESTE precio específico
                 command=lambda u=op, p=precio_real: self._agregar_servicio_final(item, 1, u, p, ventana_cierre=var_win)
             )
             btn.pack(pady=5)
@@ -465,7 +462,7 @@ class AgendarCitaFrame(ctk.CTkFrame):
     def _agregar_servicio_final(self, item, cantidad, unidad_nombre, precio_u, ventana_cierre=None):
         precio_final = float(precio_u)
         
-        # --- Lógica de Cotización Manual ($0) ---
+        # --- Lógica de Cotización Manual ---
         if precio_final == 0:
             dialog = ctk.CTkInputDialog(text=f"Cotización para: {item['nombre']}\nIngrese el costo unitario ($):", title="Cotizar Servicio")
             try: dialog.geometry(f"+{self.top_serv.winfo_rootx()+50}+{self.top_serv.winfo_rooty()+50}")
@@ -587,10 +584,9 @@ class AgendarCitaFrame(ctk.CTkFrame):
             return
             
         for x in s:
-            # Formato esperado: "11:00 AM"
             p = x.split(":")
-            h_k = f"{p[0]} {p[1].split()[1]}" # Ejemplo: "11 AM"
-            m_v = p[1].split()[0]             # Ejemplo: "00"
+            h_k = f"{p[0]} {p[1].split()[1]}"
+            m_v = p[1].split()[0]
             
             if h_k not in self.mapa_horarios: self.mapa_horarios[h_k]=[]
             self.mapa_horarios[h_k].append(m_v)
@@ -598,16 +594,13 @@ class AgendarCitaFrame(ctk.CTkFrame):
         ks = list(self.mapa_horarios.keys())
         self.cmb_h.configure(values=ks)
         
-        # Autoseleccionar el primero disponible si el actual no es válido
         if self.cmb_h.get() not in ks:
             self.cmb_h.set(ks[0])
-            
-        # FORZAR actualización de minutos basada en la hora seleccionada
+
         self.calc_fin(None)
     def calc_fin(self, _):
         """Esta función corre al mover minutos o slider. Solo calcula, NO REINICIA nada."""
         try:
-            # Simplemente leemos lo que esté seleccionado actualmente
             hf = f"{self.cmb_h.get().split()[0]}:{self.cmb_m.get()} {self.cmb_h.get().split()[1]}"
             i = datetime.strptime(hf, "%I:%M %p")
             fn = i + timedelta(minutes=int(self.slider_dur.get()))
@@ -671,18 +664,16 @@ class AgendarCitaFrame(ctk.CTkFrame):
         if d.get('rango_edad'): self.cmb_edad.set(d['rango_edad'])
         if d.get('genero'): self.cmb_gen.set("Masculino" if d['genero']=='m' else "Femenino")
         
-        # Corregir lectura de Notificación (asegurar booleano)
+        # Corregir lectura de Notificación
         val_notif = d.get('notificacion', 1)
         self.var_notif.set(True if val_notif == 1 else False)
 
         # --- CORRECCIÓN DE TRATAMIENTO PREVIO ---
-        # Leemos directo el texto que viene de la BD
         desc_bd = d.get('descripcion_tratamiento', '') or ""
         tiene_tp_mark = d.get('tratamiento_previo', 0) == 1
         
         val_prev = "Tratamiento previo: No"
         
-        # Prioridad: Lo que diga el texto
         if "Interno" in desc_bd and ("Externa" in desc_bd or "," in desc_bd):
              val_prev = "Tratamiento previo: Sí, Ambas"
         elif "Interno" in desc_bd:
@@ -716,7 +707,7 @@ class AgendarCitaFrame(ctk.CTkFrame):
         self.ent_bus.delete(0, 'end')
         self.results_frame.pack_forget()
 
-        # 2. Limpiar los campos de datos (Nombre, Tel, Email, etc.)
+        # 2. Limpiar los campos de datos
         # Habilitamos temporalmente el nombre para poder borrarlo
         self.ent_nom.configure(state="normal") 
         self.ent_nom.delete(0, 'end')
@@ -746,9 +737,9 @@ class AgendarCitaFrame(ctk.CTkFrame):
         self.ent_tel.delete(0,'end')
         self.ent_email.delete(0,'end')
         
-        # 2. Limpiar Textbox de Notas (SOLUCIÓN TEXTO FANTASMA)
+        # 2. Limpiar Textbox de Notas
         self.txt_nota.delete("1.0", "end") 
-        self.lbl_ph.place(x=5, y=5) # Forzamos que aparezca el placeholder
+        self.lbl_ph.place(x=5, y=5)
         
         self.cliente_existente_id = None
         self.cmb_edad.set("Edad")
@@ -774,7 +765,7 @@ class AgendarCitaFrame(ctk.CTkFrame):
         if hasattr(self, 'cmb_doc'):
             self.cmb_doc.set("Selecciona Doctora")
 
-        # 4. LIMPIAR FECHA (Quita la selección azul del calendario)
+        # 4. LIMPIAR FECHA
         self.selected_date = None
         self.render_calendar()
 
@@ -894,8 +885,3 @@ class AgendarCitaFrame(ctk.CTkFrame):
                 
         except Exception as e: 
             messagebox.showerror("Error Crítico", str(e))
-    def enviar_wa(self, tel, nom, fec, hor):
-        num = "".join(filter(str.isdigit, tel))
-        if len(num)<10: return
-        txt = f"Hola {nom}, cita confirmada: {fec} a las {hor}. Ortho Guzmán."
-        webbrowser.open(f"https://web.whatsapp.com/send?phone={num}&text={urllib.parse.quote(txt)}")

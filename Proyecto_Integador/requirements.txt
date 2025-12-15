@@ -2,4 +2,3 @@ customtkinter
 mysql-connector-python
 Pillow
 matplotlib
-packaging

@@ -57,18 +57,15 @@ class AgendarCitaController:
     def obtener_doctor_sugerido(self, cliente_id):
         """Busca la última doctora con la que se atendió el paciente."""
         try:
-            # Buscamos en un rango amplio hacia atrás (ej. 2 años)
+            # Buscamos en un rango amplio hacia atrás
             hoy = datetime.now()
             inicio = (hoy - timedelta(days=730)).strftime("%Y-%m-%d")
             fin = hoy.strftime("%Y-%m-%d")
             
-            # Reutilizamos la función de base de datos que ya existe para rangos
-            # Nota: Asumimos que database tiene esta función (usada en calendario)
             citas = database.obtener_citas_rango_paciente(inicio, fin, cliente_id)
             
             if citas:
-                # Ordenamos por fecha descendente (la más reciente primero)
-                # Asegúrate que 'fecha_cita' sea datetime o string comparable
+                # Ordenamos por fecha descendente
                 citas.sort(key=lambda x: x['fecha_cita'], reverse=True)
                 ultimo_doc_id = citas[0]['doctora_id']
                 return self.mapa_nombres.get(ultimo_doc_id)
@@ -76,7 +73,7 @@ class AgendarCitaController:
             pass
         return None
 
-    # --- LÓGICA DE TIEMPO (5 minutos) ---
+    # --- LÓGICA DE TIEMPO ---
     def obtener_horas_inicio_disponibles(self, fecha_dt, nombre_doctora):
         doc_id = self.mapa_ids.get(nombre_doctora)
         if not doc_id: return []

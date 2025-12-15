@@ -36,7 +36,16 @@ class Spinner(tk.Canvas):
         # 1. Si ya se detuvo manualmente, salir
         if not self.is_running: return
 
-        # 2. PROTECCIÓN TOTAL: Verificar si la ventana existe antes de tocarla
+        # Verificar si la app principal sigue viva
+        try:
+            if not self.winfo_toplevel().winfo_exists():
+                self.is_running = False
+                return
+        except:
+            self.is_running = False
+            return
+
+        # 2. Verificar si este widget existe antes de tocarlo
         try:
             if not self.winfo_exists():
                 self.is_running = False
@@ -52,14 +61,14 @@ class Spinner(tk.Canvas):
             # Guardamos la referencia para poder cancelar si se cierra
             self.after_id = self.after(20, self.animate)
         except Exception:
-            # Si falla (ventana cerrada justo en este milisegundo), paramos todo
+            # Si falla, paramos todo
             self.stop()
 
 class LoadingOverlay(ctk.CTkFrame):
     def __init__(self, master, mensaje="Cargando...", tipo="barra"):
         super().__init__(master, fg_color="#F4F6F9") 
         
-        # Intentar colocar y levantar (puede fallar si master se está cerrando)
+        # Intentar colocar y levantar
         try:
             self.place(relx=0, rely=0, relwidth=1, relheight=1)
             self.lift()
@@ -72,7 +81,7 @@ class LoadingOverlay(ctk.CTkFrame):
         self.bar = None
 
         if tipo == "circulo":
-            # --- ESTILO SPINNER (CÍRCULO) ---
+            # --- ESTILO SPINNER ---
             self.spinner = Spinner(self.center_box, size=60, color="#007BFF", bg_color="#F4F6F9")
             self.spinner.pack(pady=(0, 15))
             self.spinner.start()
@@ -81,7 +90,7 @@ class LoadingOverlay(ctk.CTkFrame):
             self.msg.pack()
 
         else:
-            # --- ESTILO BARRA (WINDOWS) ---
+            # --- ESTILO BARRA ---
             self.msg = ctk.CTkLabel(self.center_box, text=mensaje, font=("Segoe UI", 24, "bold"), text_color="#007BFF")
             self.msg.pack(pady=(0, 20))
             
@@ -120,21 +129,18 @@ def mostrar_loading(parent, duracion_ms, callback_final, tipo="barra", mensaje="
             if callback_final:
                 callback_final()
             
-            # Forzar a la interfaz a procesar los widgets nuevos
             if parent.winfo_exists():
                 parent.update_idletasks() 
         except Exception as e:
             print(f"Error carga: {e}")
             
-        # B. Destruir el spinner AL FINAL
+        # B. Destruir el spinner
         try:
             if overlay.winfo_exists():
                 overlay.destruir()
         except: pass
             
-    # 4. Programar el final (protegido)
     try:
         parent.after(duracion_ms, finalizar)
     except:
         if overlay.winfo_exists(): overlay.destruir()
-        

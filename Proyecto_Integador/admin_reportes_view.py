@@ -74,7 +74,7 @@ class AdminReportesFrame(ctk.CTkFrame):
 
         self.crear_kpi_card_comp(f, 0, "Ingresos Mes Actual", f"${kpis['ingreso_actual']:,.2f}", kpis['ingreso_perc'])
         self.crear_kpi_card_comp(f, 1, "Ingresos Mes Pasado", f"${kpis['ingreso_anterior']:,.2f}", 0, es_neutro=True)
-        # Ticket promedio estimado (placeholder logico)
+        # Ticket promedio estimado
         ticket = kpis['ingreso_actual'] / max(1, kpis['pac_actual']) # Simplificación
         self.crear_kpi_card_comp(f, 2, "Ticket Promedio (Est.)", f"${ticket:,.2f}", 0, es_neutro=True)
 
@@ -107,12 +107,12 @@ class AdminReportesFrame(ctk.CTkFrame):
 
         f = ctk.CTkFrame(self.content_area, fg_color="transparent")
         f.pack(fill="x", pady=(0, 20))
-        f.grid_columnconfigure((0,1,2,3), weight=1) # 4 Columnas para que se vea lleno
+        f.grid_columnconfigure((0,1,2,3), weight=1)
 
         self.crear_kpi_card_comp(f, 0, "Nuevos (Mes)", f"+{kpis['pac_actual']}", kpis['pac_perc'])
         self.crear_kpi_card_comp(f, 1, "Total Histórico", f"{total_hist}", 0, es_neutro=True)
         self.crear_kpi_card_comp(f, 2, "Edad Frecuente", f"{edad_top}", 0, es_neutro=True)
-        # KPI Inventado creativo: "Potencial"
+        # KPI Inventado creativo
         self.crear_kpi_card_comp(f, 3, "Meta Mensual", "85%", -15, es_neutro=False) # Ejemplo visual
 
         frame_charts = ctk.CTkFrame(self.content_area, fg_color="transparent")
@@ -131,13 +131,13 @@ class AdminReportesFrame(ctk.CTkFrame):
                            lambda ax: ax.pie(g_val, labels=g_lbl, autopct='%1.1f%%', colors=["#E91E63", "#2980B9"]))
 
 
-    # --- OTRAS SECCIONES (Operatividad y Desempeño mantienen estructura base pero con look actualizado) ---
+    # --- OTRAS SECCIONES ---
     def ver_operatividad(self):
         self.limpiar_contenido()
         self.resaltar_boton(self.btn_operaciones)
         self.header_titulo("Operatividad", "Flujo de citas por semana")
 
-        # Gráfica de Semanas (Comparativa visual)
+        # Gráfica de Semanas
         semanas, cants = self.controller.datos_grafica_semanal()
         
         frame_full = ctk.CTkFrame(self.content_area, fg_color="transparent")
@@ -149,7 +149,7 @@ class AdminReportesFrame(ctk.CTkFrame):
                                        ax.fill_between(semanas, cants, color='#E67E22', alpha=0.1),
                                        ax.grid(True, linestyle='--', alpha=0.6)))
 
-        # Top Tratamientos (Abajo divido en 2)
+        # Top Tratamientos
         frame_split = ctk.CTkFrame(self.content_area, fg_color="transparent")
         frame_split.pack(fill="x", pady=10)
         frame_split.grid_columnconfigure((0,1), weight=1)
@@ -172,7 +172,7 @@ class AdminReportesFrame(ctk.CTkFrame):
         frame_charts.pack(fill="x", pady=10)
         frame_charts.grid_columnconfigure(0, weight=1)
         
-        # Gráfica de barras vertical más estilizada
+        # Gráfica de barras vertical
         self.crear_grafica(frame_charts, 0, "Citas Completadas por Doctora", 
                            lambda ax: (ax.bar(doc_lbl, doc_val, color="#16A085", width=0.5),
                                        ax.set_ylabel("Citas")))

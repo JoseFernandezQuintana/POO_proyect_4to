@@ -14,7 +14,7 @@ class ConfFrame(ctk.CTkFrame):
         self.handle_action_callback = handle_action_callback
         self.rol_actual = rol 
         
-        # Panel lateral rectangular, blanco, con un borde sutil para definirlo
+        # Panel lateral de configuración
         self.configure(fg_color="white", corner_radius=0, width=280, border_width=1, border_color="#D5DBDB")
         
         # Contenedor principal

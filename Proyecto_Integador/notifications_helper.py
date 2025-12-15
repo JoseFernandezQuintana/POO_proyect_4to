@@ -19,7 +19,6 @@ class NotificationsHelper:
         if not email: return None
         asunto_enc = urllib.parse.quote(asunto)
         cuerpo_enc = urllib.parse.quote(cuerpo)
-        # Usamos la interfaz web de Gmail para evitar configurar Outlook
         return f"https://mail.google.com/mail/?view=cm&fs=1&to={email}&su={asunto_enc}&body={cuerpo_enc}"
 
     @staticmethod

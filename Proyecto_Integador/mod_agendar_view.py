@@ -152,7 +152,6 @@ class ModificarCitaView(ctk.CTkFrame):
     # =========================================================================
     # --- PANELES ---
     # =========================================================================
-    
     def _build_paciente_form(self, parent):
         for widget in parent.winfo_children(): widget.destroy()
         parent.bind("<Button-1>", lambda e: self.focus_set())
@@ -220,7 +219,7 @@ class ModificarCitaView(ctk.CTkFrame):
             if raw_txt:
                 parts = raw_txt.split(",")
                 for p in parts:
-                    clean_p = p.strip().rstrip('.') # Quitar puntos finales extra
+                    clean_p = p.strip().rstrip('.')
                     if clean_p: self.tratamientos_externos.append(clean_p)
 
         row_add = ctk.CTkFrame(self.frm_ext_treats, fg_color="transparent")
@@ -397,21 +396,18 @@ class ModificarCitaView(ctk.CTkFrame):
         # --- LÓGICA PARA RECUPERAR HORA Y MINUTO ORIGINAL ---
         es_mismo_dia_db = (self.selected_date == self.datos_cita['fecha_cita'])
         target_h_db = None 
-        target_m_db = None # Variable nueva para el minuto
+        target_m_db = None
 
         if es_mismo_dia_db:
             raw = self.datos_cita['hora_inicio']
-            # Convertir timedelta a time si es necesario
             if isinstance(raw, timedelta): raw = (datetime.min + raw).time()
             
             # Formatear a estilo AM/PM para buscar en el mapa
-            hora_visual_actual = raw.strftime("%I:%M %p") # "11:15 AM"
+            hora_visual_actual = raw.strftime("%I:%M %p")
             parts_t = hora_visual_actual.split(":") 
             
             if len(parts_t) > 1:
-                # Clave Hora: "11 AM"
                 target_h_db = f"{parts_t[0]} {parts_t[1].split()[1]}" 
-                # Valor Minuto: "15"
                 target_m_db = parts_t[1].split()[0]
 
             # Inyectar la hora actual en la lista de disponibles si no está
@@ -492,7 +488,7 @@ class ModificarCitaView(ctk.CTkFrame):
         e.pack(fill="x", pady=(2, 0))
         return e
 
-    # --- LÓGICA DE POPUP Y FILTROS COMPLETA (Igual a Agendar) ---
+    # --- LÓGICA DE POPUP Y FILTROS COMPLETA ---
     def open_serv_popup(self):
         self.top_serv = ctk.CTkToplevel(self)
         self.top_serv.title("Catálogo de Servicios")
@@ -508,7 +504,7 @@ class ModificarCitaView(ctk.CTkFrame):
         row1 = ctk.CTkFrame(f, fg_color="transparent")
         row1.pack(fill="x", padx=10, pady=10)
         
-        # Filtro Categoría (Usamos self.aux_ctrl para consultar catálogo)
+        # Filtro Categoría
         cats = ["Todas"] + self.aux_ctrl.obtener_categorias_unicas()
         ctk.CTkLabel(row1, text="Categoría:", font=("bold", 12)).pack(side="left")
         self.pop_cat = ctk.CTkOptionMenu(row1, values=cats, command=self._act_subs_popup, width=150, fg_color="#FAFAFA", text_color=TEXT_DARK)
@@ -562,7 +558,6 @@ class ModificarCitaView(ctk.CTkFrame):
             return
 
         for s in servicios:
-            # Tarjeta idéntica a tu versión original
             c = ctk.CTkFrame(target_scroll, fg_color="#FFFFFF", corner_radius=8, border_color="#D1D5DB", border_width=1)
             c.pack(fill="x", pady=4, padx=5)
             
@@ -583,24 +578,22 @@ class ModificarCitaView(ctk.CTkFrame):
             p_base = float(s['precio_base'])
             if p_base > 0:
                 txt_p = f"${p_base:,.2f}"
-                col_p = "#007BFF" # Azul
+                col_p = "#007BFF"
             else:
                 txt_p = "Cotizar"
-                col_p = "#FFC107" # Amarillo
+                col_p = "#FFC107"
             
             ctk.CTkLabel(right_box, text=txt_p, font=("bold", 12), text_color=col_p).pack(side="left", padx=(0, 15))
             
-            # Botón Agregar (Llama a análisis de variantes)
+            # Botón Agregar
             ctk.CTkButton(right_box, text="+ Agregar", width=80, fg_color="#28A745", hover_color="#218838", 
                           command=lambda item=s: self._analizar_variantes(item)).pack(side="left")
             
     def _analizar_variantes(self, item):
         unidad = item.get('tipo_unidad', '')
-        # Si detectamos " o " (ej: Por boca o diente) o "/" abrimos el menú
         if " o " in unidad or "/" in unidad: 
             self._abrir_selector_variante(item)
         else: 
-            # Si es simple, pasa directo con el precio base
             self._agregar_servicio_final(item, 1, unidad, item['precio_base'])
 
     def _abrir_selector_variante(self, item):
@@ -609,21 +602,21 @@ class ModificarCitaView(ctk.CTkFrame):
         # Crear ventana emergente (Popup)
         var_win = ctk.CTkToplevel(self.top_serv)
         var_win.title("Selecciona Opción")
-        var_win.geometry("350x250") # Un poco más alto para que quepan botones
+        var_win.geometry("350x250")
         var_win.transient(self.top_serv)
         var_win.grab_set()
         
-        # Centrar visualmente (opcional)
+        # Centrar visualmente 
         try: var_win.geometry(f"+{self.top_serv.winfo_rootx()+50}+{self.top_serv.winfo_rooty()+50}")
         except: pass
 
         ctk.CTkLabel(var_win, text=f"{item['nombre']}", font=("bold", 14), text_color="#333").pack(pady=(15, 5))
         ctk.CTkLabel(var_win, text="Selecciona la modalidad:", text_color="gray").pack(pady=(0, 10))
         
-        # 1. Obtener lista de nombres separando por ' o ' o '/'
+        # 1. Obtener lista de nombres separando
         nombres_opciones = item['tipo_unidad'].replace("/", " o ").split(" o ")
         
-        # 2. Intentar leer precios específicos del JSON (si existen)
+        # 2. Intentar leer precios específicos del JSON
         precios_dict = {}
         if item.get('opciones_json'):
             try: precios_dict = json.loads(item['opciones_json'])
@@ -634,14 +627,14 @@ class ModificarCitaView(ctk.CTkFrame):
             op = op.strip()
             if not op: continue
             
-            # Determinar precio: Buscamos en el JSON, si no está, usamos el base
+            # Determinar precio
             precio_real = float(precios_dict.get(op, item['precio_base']))
             
-            # Texto del botón: "Por boca - $500.00" o "Por boca - Cotizar"
+            # Texto del botón
             txt_precio = f"${precio_real:,.2f}" if precio_real > 0 else "Cotizar"
             texto_boton = f"{op}  ➔  {txt_precio}"
             
-            # Color del botón (Azul normal, Amarillo si es cotizar/0)
+            # Color del botón
             fg_col = "#007BFF" if precio_real > 0 else "#FFC107"
             text_col = "white" if precio_real > 0 else "black"
 
@@ -653,7 +646,6 @@ class ModificarCitaView(ctk.CTkFrame):
                 fg_color=fg_col,
                 text_color=text_col,
                 font=("Segoe UI", 12, "bold"),
-                # Al dar clic, enviamos ESTE precio específico
                 command=lambda u=op, p=precio_real: self._agregar_servicio_final(item, 1, u, p, ventana_cierre=var_win)
             )
             btn.pack(pady=5)
@@ -760,51 +752,138 @@ class ModificarCitaView(ctk.CTkFrame):
         }
         
         # 3. Llamada al Controlador
-        status, msg, lista_afectados = self.ctrl.guardar_cambios(self.cita_id, datos, self.current_user_id)
-        
-        if status == "pregunta_dia":
-            if messagebox.askyesno("Horario Excedido", f"{msg}\n\nSÍ: Cancelar para ajustar manual.\nNO: Guardar excediendo horario."):
-                return 
-            else: pass 
-
-        if status == "ok" or status == "pregunta_dia":
-            import time
-            from notifications_helper import NotificationsHelper
-            
-            # A. Notificar al dueño de la cita actual
-            if self.var_notif.get():
-                NotificationsHelper.enviar_notificacion_modificacion(
-                    datos['nombre'], datos['fecha'], datos['hora_inicio'], datos['telefono'], datos['email'], es_recorrida=False
-                )
-                time.sleep(1.5)
-
-            # B. MANEJO INTELIGENTE DE AFECTADOS (PROTECCIÓN)
-            cantidad = len(lista_afectados)
-            LIMITE_SEGURO = 10 
-
-            if cantidad > 0:
-                if cantidad <= LIMITE_SEGURO:
-                    # --- MODO AUTOMÁTICO (Hasta 10 afectados) ---
-                    count = 0
-                    for p in lista_afectados:
-                        if p['notif']: 
-                            if count > 0: time.sleep(2.5) 
-                            NotificationsHelper.enviar_notificacion_modificacion(
-                                p['nombre'], p['fecha'], p['hora'], p['telefono'], p['email'], es_recorrida=True
-                            )
-                            count += 1
-                    messagebox.showinfo("Éxito", f"Se guardó y se abrieron {count} notificaciones.")
-                else:
-                    # --- MODO LISTA DE TAREAS (Más de 10) ---
-                    self._mostrar_resumen_masivo(lista_afectados)
-                    messagebox.showinfo("Éxito", "Cambios guardados.\nDebido a la gran cantidad de cambios, usa la lista generada para notificar manualmente.")
-            else:
-                messagebox.showinfo("Éxito", "Cambios guardados correctamente.")
-
-            if self.callback_volver: self.callback_volver()
-            
+        status, msg, payload = self.ctrl.guardar_cambios(self.cita_id, datos, self.current_user_id)
+        if status == "conflicto_cierre":
+            # Llamamos a la función auxiliar que maneja la decisión
+            self._resolver_conflicto_cierre(msg, payload, datos)
+            return
+        elif status == "ok":
+            self._finalizar_guardado_exitoso(datos, payload)
         elif status == "error":
             messagebox.showerror("Error", msg)
+
+    def _resolver_conflicto_cierre(self, mensaje_alerta, payload, datos_originales):
+        # 1. Limpiar mensaje y llamar al popup (función auxiliar)
+        msg_limpio = mensaje_alerta.replace("¿Qué deseas hacer?", "").strip()
+        respuesta = self._mostrar_popup_decision(msg_limpio) 
+
+        # CASO 1: CANCELAR
+        if respuesta is None: 
+            return 
+        # CASO 2: FORZAR HOY
+        elif respuesta == 'forzar': 
+            st, m, pl = self.ctrl.guardar_cambios(self.cita_id, datos_originales, self.current_user_id, forzar_horario=True)
+            if st == "ok": self._finalizar_guardado_exitoso(datos_originales, pl)
+            else: messagebox.showerror("Error", m)
+            return
+        # CASO 3: MOVER A MAÑANA
+        elif respuesta == 'mover': 
+            id_conflictivo = payload['id_conflicto']
+            minutos = payload['minutos']
+            
+            sugerencia = self.ctrl.buscar_sugerencia_siguiente_dia(id_conflictivo, datos_originales['fecha'], minutos)
+            
+            if not sugerencia:
+                messagebox.showerror("Error", "No se pudo analizar la agenda de mañana.")
+                return
+
+            if sugerencia['status'] == "lleno":
+                messagebox.showwarning("Agenda Llena", "Mañana también está lleno. Resuélvelo manualmente.")
+                return
+            
+            msg_confirm = (f"Se encontró espacio para {sugerencia['paciente']}:\n\n"
+                           f"📅 Fecha: {sugerencia['fecha'].strftime('%d/%m/%Y')}\n"
+                           f"⏰ Hora: {sugerencia['hora']}\n"
+                           f"ℹ️ Criterio: {sugerencia['tipo']}\n\n"
+                           "¿Confirmar cambio de día para este paciente?")
+            
+            if messagebox.askyesno("Confirmar Movimiento", msg_confirm):
+                ok_mov = self.ctrl.mover_cita_a_fecha(id_conflictivo, sugerencia['fecha'], sugerencia['hora'], self.current_user_id)
+                if ok_mov:
+                    st, m, pl = self.ctrl.guardar_cambios(self.cita_id, datos_originales, self.current_user_id)
+                    if st == "ok":
+                        messagebox.showinfo("Resuelto", "Se movió la cita conflictiva y se guardaron tus cambios.")
+                        try:
+                            from notifications_helper import NotificationsHelper
+                            p_mov = self.ctrl.obtener_datos_paciente_id(id_conflictivo)
+                            if p_mov and p_mov['notif']:
+                                NotificationsHelper.enviar_notificacion_modificacion(
+                                    p_mov['nombre'], sugerencia['fecha'].strftime('%Y-%m-%d'), sugerencia['hora'], 
+                                    p_mov['telefono'], p_mov['email'], es_recorrida=True
+                                )
+                        except: pass
+                        self.callback_volver()
+                    else:
+                        messagebox.showerror("Error", f"Error al guardar tras mover: {m}")
+                else:
+                    messagebox.showerror("Error", "No se pudo mover la cita conflictiva.")
+
+    def _mostrar_popup_decision(self, mensaje):
+        """Genera la ventana visualmente y retorna la decisión"""
+        top = ctk.CTkToplevel(self)
+        top.title("⚠️ Horario Límite Excedido")
+        top.geometry("450x330")
+        top.resizable(False, False)
+        top.transient(self)
+        top.grab_set()
+        
+        try:
+            x = self.winfo_rootx() + (self.winfo_width()//2) - 225
+            y = self.winfo_rooty() + (self.winfo_height()//2) - 165
+            top.geometry(f"+{x}+{y}")
+        except: pass
+        
+        # Variable para guardar la decisión dentro de este scope
+        resultado = {"valor": None}
+
+        def set_res(v):
+            resultado["valor"] = v
+            top.destroy()
+
+        bg = ctk.CTkFrame(top, fg_color="white", corner_radius=10)
+        bg.pack(fill="both", expand=True, padx=15, pady=15)
+        
+        ctk.CTkLabel(bg, text="⚠️ Conflicto de Horario", font=("Segoe UI", 16, "bold"), text_color="#E67E22").pack(pady=(15, 5))
+        ctk.CTkLabel(bg, text=mensaje, font=("Segoe UI", 12), text_color="#333", wraplength=400, justify="center").pack(pady=(0, 20), padx=20)
+
+        ctk.CTkButton(bg, text="📅 Mover citas a Mañana", fg_color="#28A745", hover_color="#218838", 
+                      command=lambda: set_res('mover')).pack(fill="x", padx=40, pady=5)
+        
+        ctk.CTkButton(bg, text="⚠️ Forzar hoy (Salir tarde)", fg_color="#E67E22", hover_color="#D35400", 
+                      command=lambda: set_res('forzar')).pack(fill="x", padx=40, pady=5)
+        
+        ctk.CTkButton(bg, text="❌ Cancelar Operación", fg_color="#AAA", hover_color="#888", 
+                      command=lambda: set_res(None)).pack(fill="x", padx=40, pady=(5, 20))
+        
+        self.wait_window(top) # Espera a que se cierre la ventana
+        return resultado["valor"]
+    
+    def _finalizar_guardado_exitoso(self, datos, lista_afectados):
+        import time
+        from notifications_helper import NotificationsHelper
+        
+        # A. Notificar dueño cita actual
+        if self.var_notif.get():
+            NotificationsHelper.enviar_notificacion_modificacion(
+                datos['nombre'], datos['fecha'], datos['hora_inicio'], datos['telefono'], datos['email'], es_recorrida=False
+            )
+            time.sleep(1)
+
+        # B. Notificar afectados por empuje
+        if lista_afectados:
+            count = 0
+            for p in lista_afectados:
+                if p['notif']: 
+                    if count > 0: time.sleep(2)
+                    NotificationsHelper.enviar_notificacion_modificacion(
+                        p['nombre'], p['fecha'], p['hora'], p['telefono'], p['email'], es_recorrida=True
+                    )
+                    count += 1
+            messagebox.showinfo("Éxito", f"Cambios guardados. Se notificó a {count + 1} pacientes.")
+        else:
+            messagebox.showinfo("Éxito", "Cambios guardados correctamente.")
+
+        if self.callback_volver: self.callback_volver()
 
     def cancelar(self):
         if messagebox.askyesno("Confirmar Cancelación", "¿Estás seguro que deseas CANCELAR esta cita de forma permanente?"):

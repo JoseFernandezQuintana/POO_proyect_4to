@@ -16,23 +16,21 @@ BORDER_COLOR = "#E0E0E0"
 
 # Colores de Estado
 STATUS_COLORS = {
-    'Pendiente': "#FFC107",   
-    'En curso': "#17A2B8",    
-    'Confirmada': "#007BFF",  
-    'Completada': "#28A745",  
-    'Cancelada': "#DC3545"    
+    'Pendiente': "#FFC107",
+    'En curso': "#17A2B8",
+    'Completada': "#28A745",
+    'Cancelada': "#DC3545"
 }
 
-# Orden fijo para las métricas (Para que no "bailen" si están en 0)
-METRICS_ORDER = ['Pendiente', 'En curso', 'Confirmada', 'Completada', 'Cancelada']
+# Orden fijo para las métricas
+METRICS_ORDER = ['Pendiente', 'En curso', 'Completada', 'Cancelada']
 
-# Prioridad de ordenamiento en la lista (Citas activas primero)
+# Prioridad de ordenamiento en la lista
 STATUS_PRIORITY = {
     'En curso': 1,
     'Pendiente': 2,
-    'Confirmada': 3,
-    'Completada': 4,
-    'Cancelada': 5
+    'Completada': 3,
+    'Cancelada': 4
 }
 
 class CalendarFrame(ctk.CTkFrame):
@@ -45,15 +43,12 @@ class CalendarFrame(ctk.CTkFrame):
         self.current_date = datetime.now()
         self.paciente_filtro_id = None
         self.doctora_vars = {}
-        self.filter_widgets = {} 
-
-        # --- CORRECCIÓN FOCO: Al hacer clic en el fondo, quitar foco del entry ---
+        self.filter_widgets = {}
         self.bind("<Button-1>", self.release_focus)
 
         # Scroll General
         scroll_container = ctk.CTkScrollableFrame(self, fg_color=BG_COLOR)
         scroll_container.pack(fill="both", expand=True)
-        # Propagar evento de click para quitar foco
         scroll_container.bind("<Button-1>", self.release_focus)
         
         # Contenedor Central
@@ -174,7 +169,6 @@ class CalendarFrame(ctk.CTkFrame):
     def _create_mini_calendar(self):
         for widget in self.calendar_container.winfo_children(): widget.destroy()
         
-        # Frame centralizado para que no se expanda "a la m*****"
         center_box = ctk.CTkFrame(self.calendar_container, fg_color="white")
         center_box.pack(pady=5)
 
@@ -277,7 +271,7 @@ class CalendarFrame(ctk.CTkFrame):
         ids_sel = [id for id, var in self.doctora_vars.items() if var.get() == "on"]
         citas = self.ctrl.obtener_citas_dia(self.current_date, ids_sel)
         
-        # ORDENAR CITAS (Prioridad: En curso > Pendiente > Confirmada > Completada > Cancelada)
+        # ORDENAR CITAS
         citas.sort(key=lambda x: STATUS_PRIORITY.get(x.get('estado', 'Pendiente'), 99))
         
         self._update_metrics(citas)
@@ -310,14 +304,12 @@ class CalendarFrame(ctk.CTkFrame):
 
         # 1. HORA (AM/PM)
         try:
-            # Convertimos string "14:00:00" o timedelta a objeto hora
             raw_h = data['hora_inicio']
             if isinstance(raw_h, timedelta): 
                 t_obj = (datetime.min + raw_h).time()
             else:
                 t_obj = datetime.strptime(str(raw_h), "%H:%M:%S").time()
             
-            # Formato AM/PM sin el cero a la izquierda (3:00 PM en vez de 03:00 PM)
             h_str = t_obj.strftime("%I:%M %p").lstrip("0") 
         except: 
             h_str = str(data['hora_inicio'])[:5]
@@ -328,7 +320,7 @@ class CalendarFrame(ctk.CTkFrame):
         lbl_h = ctk.CTkLabel(f_h, text=h_str, font=ctk.CTkFont(size=20, weight="bold"), text_color=TEXT_DARK)
         lbl_h.pack(anchor="w")
 
-        # DURACIÓN FORMATEADA (1 hr 30 min)
+        # DURACIÓN FORMATEADA
         dur = data.get('duracion_minutos', 30)
         if dur < 60:
             dur_txt = f"{dur} min"
@@ -377,7 +369,7 @@ class CalendarFrame(ctk.CTkFrame):
 
     def _update_metrics(self, citas):
         total = len(citas)
-        stats = {'Pendiente':0, 'Confirmada':0, 'Completada':0, 'Cancelada':0, 'En curso':0}
+        stats = {'Pendiente':0,'En curso':0, 'Confirmada':0, 'Cancelada':0}
         for c in citas: stats[c.get('estado', 'Pendiente')] = stats.get(c.get('estado', 'Pendiente'), 0) + 1
         
         for w in self.summary_list_frame.winfo_children(): w.destroy()
@@ -388,12 +380,11 @@ class CalendarFrame(ctk.CTkFrame):
         ctk.CTkLabel(row, text="Total Citas", text_color=TEXT_DARK, font=ctk.CTkFont(weight="bold")).pack(side="left")
         ctk.CTkLabel(row, text=str(total), text_color=ACCENT_BLUE, font=ctk.CTkFont(weight="bold")).pack(side="right")
         
-        # Filas Estados (MOSTRAR TODOS SIEMPRE para consistencia)
+        # Filas Estados
         for k in METRICS_ORDER:
             v = stats.get(k, 0)
             col = STATUS_COLORS.get(k, "#333")
             
-            # Color más suave si es 0
             txt_col_val = "#333" if v > 0 else "#CCC"
             txt_col_lbl = "#666" if v > 0 else "#CCC"
             dot_col = col if v > 0 else "#E0E0E0"
@@ -425,14 +416,14 @@ class CalendarFrame(ctk.CTkFrame):
         self.ent_search.delete(0, 'end'); self.ent_search.insert(0, nombre)
         self.results_frame.pack_forget()
         self.load_daily_schedule()
-        self.focus() # Quitar foco
+        self.focus()
 
     def limpiar_paciente(self):
         self.paciente_filtro_id = None
         self.ent_search.delete(0, 'end')
         self.results_frame.pack_forget()
         self.load_daily_schedule()
-        self.focus() # Quitar foco
+        self.focus()
 
     def select_day(self, d):
         self.current_date = self.current_date.replace(day=d)

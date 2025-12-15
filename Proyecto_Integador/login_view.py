@@ -22,6 +22,9 @@ class LoginApp:
         
         self.root.title("Acceso - Ortho Guzmán")
         self.root.configure(fg_color=BG_COLOR)
+        
+        # Control de foco global
+        self.root.bind_all("<Button-1>", self.gestionar_foco)
 
         # --- TARJETA PRINCIPAL ---
         self.main_frame = ctk.CTkFrame(
@@ -34,15 +37,15 @@ class LoginApp:
         self.main_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.85, relheight=0.8)
 
         self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_columnconfigure(1, weight=0) # Línea separadora
+        self.main_frame.grid_columnconfigure(1, weight=0) 
         self.main_frame.grid_columnconfigure(2, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
 
-        # === IZQUIERDA: LOGO + TEXTO AZUL ===
+        # === IZQUIERDA ===
         self.left_side = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.left_side.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
         
-        # Contenedor para centrar verticalmente
+        # Contenedor logo
         self.logo_box = ctk.CTkFrame(self.left_side, fg_color="transparent")
         self.logo_box.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -57,7 +60,6 @@ class LoginApp:
         except:
             ctk.CTkLabel(self.logo_box, text="🦷", font=("Arial", 80)).pack(pady=(0,15))
 
-        # Texto del sistema
         ctk.CTkLabel(
             self.logo_box, 
             text="Sistema de Gestión de Citas", 
@@ -93,8 +95,6 @@ class LoginApp:
 
         # Contraseña
         ctk.CTkLabel(self.form_box, text="Contraseña", font=("Arial", 12, "bold"), text_color="#555").pack(anchor="w", pady=(0,5))
-        
-        # --- NUEVO: Contenedor para Input + Botón Ojo ---
         self.pass_frame = ctk.CTkFrame(self.form_box, fg_color="transparent")
         self.pass_frame.pack(fill="x", pady=(0, 25))
 
@@ -109,7 +109,6 @@ class LoginApp:
         )
         self.pass_entry.pack(side="left", fill="x", expand=True)
 
-        # Botón Ojo (Texto simple)
         self.btn_eye = ctk.CTkButton(
             self.pass_frame,
             text="👁",
@@ -122,7 +121,6 @@ class LoginApp:
             command=self.toggle_password
         )
         self.btn_eye.pack(side="right", padx=(5, 0))
-        # -----------------------------------------------
 
         # Botón Login
         self.btn_login = ctk.CTkButton(
@@ -136,17 +134,24 @@ class LoginApp:
         )
         self.btn_login.pack(fill="x", pady=10)
         
-        # Permitir Enter para login
         self.pass_entry.bind("<Return>", lambda e: self.login_action())
 
+    def gestionar_foco(self, event):
+        try:
+            widget = event.widget
+            if "entry" in widget.winfo_class().lower():
+                return
+            self.root.focus_set()
+        except:
+            pass
+
     def toggle_password(self):
-        """Alterna la visibilidad de la contraseña"""
         if self.pass_entry.cget("show") == "*":
             self.pass_entry.configure(show="")
-            self.btn_eye.configure(text="✕") # Icono para ocultar
+            self.btn_eye.configure(text="✕") 
         else:
             self.pass_entry.configure(show="*")
-            self.btn_eye.configure(text="👁") # Icono para mostrar
+            self.btn_eye.configure(text="👁") 
 
     def login_action(self):
         u = self.user_entry.get().strip()

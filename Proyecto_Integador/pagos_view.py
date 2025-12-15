@@ -12,13 +12,12 @@ BORDER_COLOR = "#E0E0E0"
 DANGER_COLOR = "#DC3545"
 
 class PagosFrame(ctk.CTkFrame):
-    
     def __init__(self, master):
         super().__init__(master, fg_color=BG_MAIN)
         self.controller = PagosController()
         self.cita_seleccionada = None
         
-        # Grid Principal: 2 Columnas
+        # Grid Principal
         self.grid_columnconfigure(0, weight=4) # Lista
         self.grid_columnconfigure(1, weight=6) # Detalle
         self.grid_rowconfigure(0, weight=1)
@@ -28,7 +27,6 @@ class PagosFrame(ctk.CTkFrame):
         self.left_panel.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
         self.left_panel.grid_rowconfigure(2, weight=1)
         self.left_panel.grid_columnconfigure(0, weight=1)
-        # Evento para quitar foco
         self.left_panel.bind("<Button-1>", lambda e: self.focus_set())
 
         # Título
@@ -38,12 +36,12 @@ class PagosFrame(ctk.CTkFrame):
         frame_busqueda = ctk.CTkFrame(self.left_panel, fg_color="transparent")
         frame_busqueda.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
         
-        # Buscador (se expande a la izquierda)
+        # Buscador
         self.ent_search = ctk.CTkEntry(frame_busqueda, placeholder_text="🔍 Buscar por nombre...", height=35, fg_color="#FAFAFA")
         self.ent_search.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self.ent_search.bind("<KeyRelease>", self.filtrar_deudores)
 
-        # Botón Actualizar (pequeño a la derecha)
+        # Botón Actualizar
         ctk.CTkButton(frame_busqueda, text="🔄", width=40, height=35, fg_color="transparent", border_color=ACCENT_BLUE, border_width=1, text_color=ACCENT_BLUE, hover_color="#E6F0FF", command=self.cargar_datos_iniciales).pack(side="right")
 
         # Lista Scrollable
@@ -51,15 +49,11 @@ class PagosFrame(ctk.CTkFrame):
         self.scroll_deudas.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
 
         # --- DERECHA: FORMULARIO DE COBRO ---
-        # CAMBIO AQUÍ: Usamos CTkScrollableFrame en lugar de CTkFrame
         self.right_panel = ctk.CTkScrollableFrame(self, fg_color="transparent") 
         self.right_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 20), pady=20)
-        
-        # Estas configuraciones de grid ya no son estrictamente necesarias para el scroll, 
-        # pero ayudan a centrar el contenido.
         self.right_panel.grid_columnconfigure(0, weight=1)
 
-        # Tarjeta de Detalle (Se mantiene igual, pero ahora dentro del scroll)
+        # Tarjeta de Detalle
         self.detail_card = ctk.CTkFrame(self.right_panel, fg_color=WHITE_CARD, corner_radius=15, border_color=BORDER_COLOR, border_width=1)
         self.detail_card.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
         self.detail_card.bind("<Button-1>", lambda e: self.focus_set())
@@ -69,7 +63,7 @@ class PagosFrame(ctk.CTkFrame):
         self.frm_detalle.pack(fill="both", expand=True, padx=20, pady=20)
         self.crear_placeholder_detalle()
 
-        # Tarjeta de Pago (Se mantiene igual)
+        # Tarjeta de Pago
         self.pay_card = ctk.CTkFrame(self.right_panel, fg_color=WHITE_CARD, corner_radius=15, border_color=BORDER_COLOR, border_width=1)
         self.pay_card.grid(row=1, column=0, sticky="ew")
         self.pay_card.bind("<Button-1>", lambda e: self.focus_set())

@@ -23,7 +23,6 @@ class AdminUsuariosFrame(ctk.CTkFrame):
             self.user_id_sesion = 0
 
         # --- EVENTO GLOBAL PARA QUITAR FOCO ---
-        # Vinculamos el clic en el fondo principal para soltar el cursor
         self.bind("<Button-1>", self.quitar_foco)
 
         # Layout Principal
@@ -141,20 +140,17 @@ class AdminUsuariosFrame(ctk.CTkFrame):
             es_target_admin = (u['rol'] == "Administrador")
             soy_admin_supremo = (self.rol_actual == "Administrador")
             
-            # REGLA DE ORO: Si es Admin, solo otro Admin lo toca.
-            # Si soy Doctora (o Recepcionista con permiso de Doctora), se bloquea.
             bloqueado = False
             if es_target_admin and not soy_admin_supremo:
                 bloqueado = True
 
-            # ... (Creación de la tarjeta visual igual que antes) ...
             card = ctk.CTkFrame(self.scroll_list, fg_color="#FAFAFA", corner_radius=6)
             card.pack(fill="x", pady=3, padx=5)
             card.grid_columnconfigure(0, weight=3, uniform="cols") 
             card.grid_columnconfigure(1, weight=2, uniform="cols") 
             card.grid_columnconfigure(2, weight=1, uniform="cols") 
 
-            # Nombre y Rol (Igual)
+            # Nombre y Rol
             lbl_nom = ctk.CTkLabel(card, text=u['nombre_completo'], font=("Segoe UI", 12, "bold"), anchor="w")
             lbl_nom.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
             col_rol = ACCENT if u['rol'] == "Administrador" else ("#28A745" if u['rol']=="Doctora" else "gray")
@@ -167,7 +163,6 @@ class AdminUsuariosFrame(ctk.CTkFrame):
             if not bloqueado:
                 ctk.CTkButton(btns, text="✏️", width=30, fg_color="#FFC107", text_color="black", hover_color="#FFD54F", 
                               command=lambda x=u: self.editar(x)).pack(side="left", padx=2)
-                
                 # No puedes borrarte a ti mismo
                 if u['id'] != self.user_id_sesion:
                     ctk.CTkButton(btns, text="🗑️", width=30, fg_color=DANGER, hover_color="#C82333", 

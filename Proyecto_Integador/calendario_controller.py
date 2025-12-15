@@ -26,9 +26,8 @@ class CalendarioController:
         if month == 12: fin = f"{year+1}-01-01"
         else: fin = f"{year}-{month+1:02d}-01"
 
-        # 1. Días con citas de las doctoras seleccionadas (Negritas/Indicador)
+        # 1. Días con citas de las doctoras seleccionadas (Negritas)
         if ids_doctoras:
-            # Nota: database.py devuelve 'fecha_cita'
             citas = database.obtener_citas_rango_doctoras(inicio, fin, ids_doctoras)
             for c in citas:
                 try: 
