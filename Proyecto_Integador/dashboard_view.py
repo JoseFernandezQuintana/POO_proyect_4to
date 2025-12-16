@@ -390,7 +390,15 @@ class DashboardApp:
                 self.logout()
         elif "Cerrar App" in act:
             if messagebox.askyesno("Salir", "¿Estás seguro de que quieres salir?"):
-                self.root.event_generate("WM_DELETE_WINDOW")
+                try:
+                    # Intenta cerrar la ventana suavemente
+                    self.root.quit()    # Detiene el ciclo principal (animaciones)
+                    self.root.destroy() # Destruye la ventana
+                except Exception as e:
+                    # Si algo falla, muestra el error y fuerza el cierre
+                    messagebox.showerror("Error al cerrar", f"Ocurrió un error interno:\n{e}")
+                    import sys
+                    sys.exit()
 
     def _solicitar_permiso_supervisor(self):
         """Muestra el NUEVO popup estilizado y retorna el ROL del supervisor (o None)"""
